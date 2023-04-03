@@ -1,11 +1,12 @@
 # Big News!
 
-# Command Line ChatGPT Bot
+# ChatGPT
 
-This is a simple chat-bot that uses the OpenAI ChatGPT API.
+This is a command-line tool for controlling ChatGPT, a large language model trained by OpenAI. ChatGPT can generate human-like text in response to prompts.
 
 # Setup
 
+## Environment
 Make sure you have python3 installed:
 
 ```
@@ -14,24 +15,12 @@ python3 --version
 
 Create a virtual environment and install the dependencies:
 
-# Configuration
-
-Copy `env.sample` to `.env` and add your OpenAI API key to the file.
-
-```
-OPENAI_API_KEY=<<YOUR_API_KEY>>
-```
-
-# ChatGPT
-
-This is a command-line tool for controlling ChatGPT, a large language model trained by OpenAI. ChatGPT can generate human-like text in response to prompts.
-
-# Setup
 Install the requirements
 ```
 pip install -r requirements.txt
 ```
 
+## API Key
 Create a file `.env` and put in your [OpenAI API Key](https://platform.openai.com/account/api-keys):
 ```
 OPENAI_API_KEY=<your OPENAI API Key>
