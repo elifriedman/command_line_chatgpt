@@ -176,7 +176,7 @@ def run_iteratively(
 def parse_args():
     parser = argparse.ArgumentParser(description="Arguments for controlling ChatGPT")
     parser.add_argument(
-        "--instructions_path",
+        "--instructions_path", "-i",
         type=str,
         default="/home/eli/workspace/gpt/command_line_chatgpt/instructions.txt",
         help="Filepath for initial ChatGPT instruction prompt (default instructions.txt). See https://github.com/f/awesome-chatgpt-prompts for inspiration",
