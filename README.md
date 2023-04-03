@@ -1,5 +1,3 @@
-# Big News!
-
 # ChatGPT
 
 This is a command-line tool for controlling ChatGPT, a large language model trained by OpenAI. ChatGPT can generate human-like text in response to prompts.
