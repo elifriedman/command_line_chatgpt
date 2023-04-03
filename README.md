@@ -1,24 +1,8 @@
 # Big News!
 
-There's now an official ChatGPT API!!!
-
-Watch the walk-through video for this repo here:
-
-[![ChatGPT API Walkthrough](https://img.youtube.com/vi/k-ieXU3apBY/0.jpg)](https://youtu.be/k-ieXU3apBY)
-
-If you want to look at the old code for this project Simply clone the repo and checkout the `davinci-version` branch.
-
-```
-git checkout davinci-version
-```
-
-Otherwise, just use the default `main` branch and you'll be plugged into the official ChatGPT API!
-
 # Command Line ChatGPT Bot
 
 This is a simple chat-bot that uses the OpenAI ChatGPT API.
-
-You can watch the original video walkthrough that uses the davinci-model [here](https://youtu.be/jQFhtFMDz1s). There will be a new video coming shortly to match the new code.
 
 # Setup
 
@@ -30,22 +14,6 @@ python3 --version
 
 Create a virtual environment and install the dependencies:
 
-### Linux/Mac:
-
-```
-python3 -m venv venv
-. ./venv/bin/activate
-pip install -r requirements.txt
-```
-
-### Windows:
-
-```
-python -m venv venv
-venv\Scripts\activate.bat
-pip install -r requirements.txt
-```
-
 # Configuration
 
 Copy `env.sample` to `.env` and add your OpenAI API key to the file.
@@ -54,35 +22,41 @@ Copy `env.sample` to `.env` and add your OpenAI API key to the file.
 OPENAI_API_KEY=<<YOUR_API_KEY>>
 ```
 
-Edit `main.py` and replace `<<PUT THE PROMPT HERE>>` with your prompt:
+# ChatGPT
 
-e.g. Create a simple AI cocktail assistant
+This is a command-line tool for controlling ChatGPT, a large language model trained by OpenAI. ChatGPT can generate human-like text in response to prompts.
 
+# Setup
+Install the requirements
 ```
-INSTRUCTIONS = """You are an AI assistant that is an expert in alcoholic beverages.
-You know about cocktails, wines, spirits and beers.
-You can provide advice on drink menus, cocktail ingredients, how to make cocktails, and anything else related to alcoholic drinks.
-If you are unable to provide an answer to a question, please respond with the phrase "I'm just a simple barman, I can't help with that."
-Please aim to be as helpful, creative, and friendly as possible in all of your responses.
-Do not use any external URLs in your answers. Do not refer to any blogs in your answers.
-Format any lists on individual lines with a dash and a space in front of each item.
-"""
+pip install -r requirements.txt
 ```
 
-# Running
-
-To run just do the following:
-
-### Linux/Mac:
-
+Create a file `.env` and put in your [OpenAI API Key](https://platform.openai.com/account/api-keys):
 ```
-. ./venv/bin/activate
-python main.py
+OPENAI_API_KEY=<your OPENAI API Key>
 ```
 
-### Windows:
+If you want, add an entry to your .bashrc file
+```
+echo alias gpt="$(pwd)/gpt.py" >> ~/.bashrc
+```
+
+## Usage
 
 ```
-venv\Scripts\activate.bat
-python main.py
+usage: gpt.py [-h] [--instructions_path INSTRUCTIONS_PATH] [--temperature TEMPERATURE] [--max_tokens MAX_TOKENS]
+              [--frequency_penalty FREQUENCY_PENALTY] [--presence_penalty PRESENCE_PENALTY]
+              [--max_contexts MAX_CONTEXTS]
 ```
+
+## Arguments
+
+- `-h`, `--help`: show help message and exit
+- `--instructions_path`, `-i`: filepath for initial ChatGPT instruction prompt (default instructions.txt). See https://github.com/f/awesome-chatgpt-prompts for inspiration
+- `--temperature`: temperature value for generating text
+- `--max_tokens`: maximum number of tokens to generate
+- `--frequency_penalty`: frequency penalty value for generating text
+- `--presence_penalty`: presence penalty value for generating text
+- `--max_contexts`: maximum number of questions to include in prompt
+
