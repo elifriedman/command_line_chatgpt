@@ -58,7 +58,7 @@ class QuestionAnswer:
         messages = self.assemble_messages(new_question)
         try:
             completion = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
+                model="gpt-3.5-turbo-0301",
                 messages=messages,
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
@@ -181,15 +181,15 @@ def parse_args():
         default="/home/eli/workspace/gpt/command_line_chatgpt/instructions.txt",
         help="Filepath for initial ChatGPT instruction prompt (default instructions.txt). See https://github.com/f/awesome-chatgpt-prompts for inspiration",
     )
-    parser.add_argument("--temperature", type=float, default=0.5, help="Temperature value for generating text")
-    parser.add_argument("--max_tokens", type=int, default=500, help="Maximum number of tokens to generate")
+    parser.add_argument("--temperature", "-t", type=float, default=0.5, help="Temperature value for generating text")
+    parser.add_argument("--max_tokens", "-n", type=int, default=500, help="Maximum number of tokens to generate")
     parser.add_argument(
-        "--frequency_penalty", type=float, default=0, help="Frequency penalty value for generating text"
+        "--frequency_penalty", "-f", type=float, default=0, help="Frequency penalty value for generating text"
     )
     parser.add_argument(
-        "--presence_penalty", type=float, default=0.6, help="Presence penalty value for generating text"
+        "--presence_penalty", "-p", type=float, default=0.6, help="Presence penalty value for generating text"
     )
-    parser.add_argument("--max_contexts", type=int, default=10, help="Maximum number of questions to include in prompt")
+    parser.add_argument("--max_contexts", "-c", type=int, default=10, help="Maximum number of questions to include in prompt")
     args = parser.parse_args()
     return args
 
