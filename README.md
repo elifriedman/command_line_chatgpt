@@ -1,6 +1,8 @@
 # ChatGPT
 
-This is a command-line tool for controlling ChatGPT, a large language model trained by OpenAI. ChatGPT can generate human-like text in response to prompts.
+This is a command-line tool for controlling ChatGPT from the command line.
+
+![example.png](https://github.com/elifriedman/command_line_chatgpt/blob/main/example.png)
 
 # Setup
 
