@@ -42,7 +42,7 @@ usage: gpt.py [-h] [--instructions_path INSTRUCTIONS_PATH] [--temperature TEMPER
 ## Arguments
 
 - `-h`, `--help`: show help message and exit
-- `--instructions_path`, `-i`: filepath for initial ChatGPT instruction prompt (default instructions.txt). See https://github.com/f/awesome-chatgpt-prompts for inspiration
+- `--instructions_path`, `-i`: filepath for initial ChatGPT instruction prompt (default instructions.txt). See https://github.com/f/awesome-chatgpt-prompts for inspiration or an instruction string
 - `--temperature`: temperature value for generating text
 - `--max_tokens`: maximum number of tokens to generate
 - `--frequency_penalty`: frequency penalty value for generating text
