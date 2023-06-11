@@ -5,6 +5,7 @@ import argparse
 import readline
 from dotenv import load_dotenv
 from colorama import Fore, Back, Style
+from pathlib import Path
 
 # load values from the .env file if it exists
 load_dotenv()
@@ -15,8 +16,7 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 
 def read_instructions(path):
     if not os.path.exists(path):
-        print("Instruction path does not exist")
-        return ""
+        return path
     with open(path) as f:
         return f.read()
 
@@ -31,6 +31,7 @@ class QuestionAnswer:
         presence_penalty: float = 0.6,
         max_contexts: int = 10,
         context_file: str = None,
+        model: str = "gpt-3.5-turbo"
     ):
         self.instructions = instructions
         self.temperature = temperature
@@ -40,6 +41,7 @@ class QuestionAnswer:
         self.max_contexts = max_contexts
         self.context_file = context_file
         self.context = []
+        self.model = model
 
     def assemble_messages(self, new_question):
         messages = [
@@ -58,7 +60,7 @@ class QuestionAnswer:
         messages = self.assemble_messages(new_question)
         try:
             completion = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo-0301",
+                model=self.model,
                 messages=messages,
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
@@ -67,7 +69,7 @@ class QuestionAnswer:
                 presence_penalty=self.presence_penalty,
             )
         except openai.error.RateLimitError as exc:
-            print(Fore.RED + Style.BRIGHT + "You're going too fast! Error: " + exc + Style.RESET_ALL)
+            print(Fore.RED + Style.BRIGHT + "You're going too fast! Error: " + str(exc) + Style.RESET_ALL)
             return ""
         response = completion.choices[0].message.content
         self.context.append((new_question, response))
@@ -105,10 +107,14 @@ def get_question():
     full_question = ""
     current_question = ""
     end = "///"
+    just_started = True
     print(Fore.GREEN + Style.BRIGHT + f"Enter prompt and then {end} to end your question:" + Style.RESET_ALL)
     while end not in current_question:
         current_question = input()
-        full_question += f"\n{current_question}"
+        if just_started is False:
+            current_question = "\n" + current_question
+        full_question += f"{current_question}"
+        just_started = False
     full_question = full_question.replace(end, "")
     return full_question
 
@@ -121,6 +127,7 @@ def run(
     presence_penalty: float = 0.6,
     max_contexts: int = 10,
     context_file: str = None,
+    model: str = "gpt-3.5-turbo"
 ):
     question_answer = QuestionAnswer(
         instructions=instructions,
@@ -130,10 +137,16 @@ def run(
         presence_penalty=presence_penalty,
         max_contexts=max_contexts,
         context_file=context_file,
+        model=model,
     )
     response = question_answer.get_response(question)
-    print(response)
+    return response
 
+def save_conversation(text, filepath):
+    path = Path(filepath)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a") as f:
+        f.write(text+"\n")
 
 def run_iteratively(
     instructions: str,
@@ -143,6 +156,8 @@ def run_iteratively(
     presence_penalty: float = 0.6,
     max_contexts: int = 10,
     context_file: str = None,
+    model: str = "gpt-3.5-turbo",
+    filepath: Path = Path(os.path.expanduser("~/.gpt/history.txt"))
 ):
     question_answer = QuestionAnswer(
         instructions=instructions,
@@ -152,10 +167,12 @@ def run_iteratively(
         presence_penalty=presence_penalty,
         max_contexts=max_contexts,
         context_file=context_file,
+        model=model,
     )
 
-    os.system("cls" if os.name == "nt" else "clear")
     # keep track of previous questions and answers
+    save_conversation(f"----- New Conversation -----"
+        f"\n{instructions}\n----------------------------", filepath)
     while True:
         new_question = get_question()
         print(Fore.CYAN + "Processing..." + Style.RESET_ALL)
@@ -168,18 +185,20 @@ def run_iteratively(
                 print(error)
             print(Style.RESET_ALL)
             continue
+        save_conversation(f">>>>>\n{new_question}", filepath)
         response = question_answer.get_response(new_question)
+        save_conversation(f"<<<<<\n{response}", filepath)
         # print the response
-        print(Fore.CYAN + Style.BRIGHT + response + Style.RESET_ALL)
+        print(Style.RESET_ALL + response)
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Arguments for controlling ChatGPT")
     parser.add_argument(
-        "--instructions_path", "-i",
+        "--instructions", "-i",
         type=str,
-        default="/home/eli/workspace/gpt/command_line_chatgpt/instructions.txt",
-        help="Filepath for initial ChatGPT instruction prompt (default instructions.txt). See https://github.com/f/awesome-chatgpt-prompts for inspiration",
+        default=os.path.expanduser(".gpt/default_prompt.txt"),
+        help="Filepath for initial ChatGPT instruction prompt (default ~/.gpt/default_prompt.txt). See https://github.com/f/awesome-chatgpt-prompts for inspiration",
     )
     parser.add_argument("--temperature", "-t", type=float, default=0.5, help="Temperature value for generating text")
     parser.add_argument("--max_tokens", "-n", type=int, default=500, help="Maximum number of tokens to generate")
@@ -190,6 +209,7 @@ def parse_args():
         "--presence_penalty", "-p", type=float, default=0.6, help="Presence penalty value for generating text"
     )
     parser.add_argument("--max_contexts", "-c", type=int, default=10, help="Maximum number of questions to include in prompt")
+    parser.add_argument("--model", "-m", type=str, default="gpt-3.5-turbo", help="Which chatgpt model to use")
     args = parser.parse_args()
     return args
 
@@ -197,13 +217,14 @@ def parse_args():
 def main():
     args = parse_args()
     run_iteratively(
-        instructions=read_instructions(args.instructions_path),
+        instructions=read_instructions(args.instructions),
         temperature=args.temperature,
         max_tokens=args.max_tokens,
         frequency_penalty=args.frequency_penalty,
         presence_penalty=args.presence_penalty,
         max_contexts=args.max_contexts,
         context_file=None,
+        model=args.model
     )
 
 
