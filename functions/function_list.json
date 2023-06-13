@@ -1,0 +1,18 @@
+[
+    {
+        "name": "calculator",
+        "description": "A calculator that can calculate the result of python encoded math equations",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "expression": {
+                    "type": "string",
+                    "description": "A python expression to calculate"
+                }
+            },
+            "required": [
+                "expression"
+            ]
+        }
+    }
+]

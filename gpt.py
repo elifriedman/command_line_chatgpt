@@ -1,4 +1,5 @@
 #!/home/eli/workspace/gpt/venv/bin/python
+import sys
 import os
 import openai
 import argparse
@@ -6,6 +7,15 @@ import readline
 from dotenv import load_dotenv
 from colorama import Fore, Back, Style
 from pathlib import Path
+import importlib
+import json
+from enum import Enum
+
+
+def load_json(f):
+    with open(f) as f:
+        return json.load(f)
+
 
 # load values from the .env file if it exists
 load_dotenv()
@@ -21,6 +31,41 @@ def read_instructions(path):
         return f.read()
 
 
+def read_function_list(path):
+    return json.load(path)
+
+
+class Role(Enum):
+    SYSTEM = "system"
+    USER = "user"
+    ASSISTANT = "assistant"
+    FUNCTION = "function"
+
+
+class Context:
+    def __init__(self, instructions, max_contexts: int = 10, context_file: str = None):
+        self.instructions = instructions
+        self.context_file = context_file
+        self.max_contexts = 10
+        self._context = []
+
+    def reset_context(self):
+        self._context = []
+
+    def make_context_item(self, content, role: Role, **kwargs):
+        return {"role": role.value, "content": content, **kwargs}
+
+    def add(self, content, role: Role, **kwargs):
+        new_context = self.make_context_item(content=content, role=role, **kwargs)
+        self._context.append(new_context)
+
+    @property
+    def context(self):
+        system_prompt = self.make_context_item(content=self.instructions, role=Role.SYSTEM)
+        contexts = self._context[-self.max_contexts :]
+        return [system_prompt] + contexts
+
+
 class QuestionAnswer:
     def __init__(
         self,
@@ -31,33 +76,49 @@ class QuestionAnswer:
         presence_penalty: float = 0.6,
         max_contexts: int = 10,
         context_file: str = None,
-        model: str = "gpt-3.5-turbo"
+        model: str = "gpt-3.5-turbo-0613",
+        function_path: Path = Path(os.path.expanduser("~/.gpt/functions")),
     ):
-        self.instructions = instructions
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.presence_penalty = presence_penalty
         self.frequency_penalty = frequency_penalty
         self.max_contexts = max_contexts
-        self.context_file = context_file
-        self.context = []
+        self.context = Context(instructions, max_contexts=max_contexts, context_file=context_file)
         self.model = model
+        self.function_path = function_path
+        self.functions = load_json(function_path / "function_list.json")
+        if str(self.function_path) not in sys.path:
+            sys.path.append(str(self.function_path))
 
-    def assemble_messages(self, new_question):
-        messages = [
-            {"role": "system", "content": self.instructions},
-        ]
-        # add the previous questions and answers
-        for question, answer in self.context[-self.max_contexts :]:
-            messages.append({"role": "user", "content": question})
-            messages.append({"role": "assistant", "content": answer})
-        # add the new question
-        messages.append({"role": "user", "content": new_question})
-        return messages
+    def call_method_from_file(self, file_name, function_name, args):
+        try:
+            module = importlib.import_module(file_name)
+            method = getattr(module, function_name)
+            result = method(**args)
+            if isinstance(result, dict):
+                result = json.dumps(result)
+
+            return str(result)
+        except Exception as e:
+            # Handle any exceptions that occur during the process
+            return f"Error running function '{function_name}' from file '{file_name}' with args {args}: {str(e)}"
+
+    def handle_function_call(self, function_info):
+        function_name = function_info["name"]
+        arguments = function_info["arguments"]
+        try:
+            arguments = json.loads(arguments)
+        except Exception as exc:
+            return f"Error parsing json '{arguments}' {exc}"
+        return self.call_method_from_file(
+            file_name="functions", function_name=function_name, args=arguments
+        )
 
     def get_response(self, new_question):
         # build the messages
-        messages = self.assemble_messages(new_question)
+        self.context.add(content=new_question, role=Role.USER)
+        messages = self.context.context
         try:
             completion = openai.ChatCompletion.create(
                 model=self.model,
@@ -67,12 +128,26 @@ class QuestionAnswer:
                 top_p=1,
                 frequency_penalty=self.frequency_penalty,
                 presence_penalty=self.presence_penalty,
+                functions=self.functions,
+                function_call="auto",
             )
         except openai.error.RateLimitError as exc:
-            print(Fore.RED + Style.BRIGHT + "You're going too fast! Error: " + str(exc) + Style.RESET_ALL)
+            print(
+                Fore.RED
+                + Style.BRIGHT
+                + "You're going too fast! Error: "
+                + str(exc)
+                + Style.RESET_ALL
+            )
             return ""
-        response = completion.choices[0].message.content
-        self.context.append((new_question, response))
+
+        if completion.choices[0].finish_reason == "function_call":
+            function_info = completion.choices[0].message.function_call
+            response = self.handle_function_call(function_info)
+            self.context.add(content=response, role=Role.FUNCTION, name=function_info["name"])
+        else:
+            response = completion.choices[0].message.content
+            self.context.add(content=response, role=Role.ASSISTANT)
         return response
 
 
@@ -98,7 +173,9 @@ def get_moderation(question):
     response = openai.Moderation.create(input=question)
     if response.results[0].flagged:
         # get the categories that are flagged and generate a message
-        result = [error for category, error in errors.items() if response.results[0].categories[category]]
+        result = [
+            error for category, error in errors.items() if response.results[0].categories[category]
+        ]
         return result
     return None
 
@@ -108,7 +185,12 @@ def get_question():
     current_question = ""
     end = "///"
     just_started = True
-    print(Fore.GREEN + Style.BRIGHT + f"Enter prompt and then {end} to end your question:" + Style.RESET_ALL)
+    print(
+        Fore.GREEN
+        + Style.BRIGHT
+        + f"Enter prompt and then {end} to end your question:"
+        + Style.RESET_ALL
+    )
     while end not in current_question:
         current_question = input()
         if just_started is False:
@@ -117,6 +199,7 @@ def get_question():
         just_started = False
     full_question = full_question.replace(end, "")
     return full_question
+
 
 def run(
     instructions: str,
@@ -127,7 +210,7 @@ def run(
     presence_penalty: float = 0.6,
     max_contexts: int = 10,
     context_file: str = None,
-    model: str = "gpt-3.5-turbo"
+    model: str = "gpt-3.5-turbo-0613",
 ):
     question_answer = QuestionAnswer(
         instructions=instructions,
@@ -142,11 +225,13 @@ def run(
     response = question_answer.get_response(question)
     return response
 
+
 def save_conversation(text, filepath):
     path = Path(filepath)
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "a") as f:
-        f.write(text+"\n")
+        f.write(text + "\n")
+
 
 def run_iteratively(
     instructions: str,
@@ -156,8 +241,8 @@ def run_iteratively(
     presence_penalty: float = 0.6,
     max_contexts: int = 10,
     context_file: str = None,
-    model: str = "gpt-3.5-turbo",
-    filepath: Path = Path(os.path.expanduser("~/.gpt/history.txt"))
+    model: str = "gpt-3.5-turbo-0613",
+    filepath: Path = Path(os.path.expanduser("~/.gpt/history.txt")),
 ):
     question_answer = QuestionAnswer(
         instructions=instructions,
@@ -171,8 +256,10 @@ def run_iteratively(
     )
 
     # keep track of previous questions and answers
-    save_conversation(f"----- New Conversation -----"
-        f"\n{instructions}\n----------------------------", filepath)
+    save_conversation(
+        f"----- New Conversation -----" f"\n{instructions}\n----------------------------",
+        filepath,
+    )
     while True:
         new_question = get_question()
         print(Fore.CYAN + "Processing..." + Style.RESET_ALL)
@@ -180,7 +267,9 @@ def run_iteratively(
         # check the question is safe
         errors = get_moderation(new_question)
         if errors:
-            print(Fore.RED + Style.BRIGHT + "Sorry, you're question didn't pass the moderation check:")
+            print(
+                Fore.RED + Style.BRIGHT + "Sorry, you're question didn't pass the moderation check:"
+            )
             for error in errors:
                 print(error)
             print(Style.RESET_ALL)
@@ -195,21 +284,54 @@ def run_iteratively(
 def parse_args():
     parser = argparse.ArgumentParser(description="Arguments for controlling ChatGPT")
     parser.add_argument(
-        "--instructions", "-i",
+        "--instructions",
+        "-i",
         type=str,
         default=os.path.expanduser(".gpt/default_prompt.txt"),
         help="Filepath for initial ChatGPT instruction prompt (default ~/.gpt/default_prompt.txt). See https://github.com/f/awesome-chatgpt-prompts for inspiration",
     )
-    parser.add_argument("--temperature", "-t", type=float, default=0.5, help="Temperature value for generating text")
-    parser.add_argument("--max_tokens", "-n", type=int, default=500, help="Maximum number of tokens to generate")
     parser.add_argument(
-        "--frequency_penalty", "-f", type=float, default=0, help="Frequency penalty value for generating text"
+        "--temperature",
+        "-t",
+        type=float,
+        default=0.5,
+        help="Temperature value for generating text",
     )
     parser.add_argument(
-        "--presence_penalty", "-p", type=float, default=0.6, help="Presence penalty value for generating text"
+        "--max_tokens",
+        "-n",
+        type=int,
+        default=500,
+        help="Maximum number of tokens to generate",
     )
-    parser.add_argument("--max_contexts", "-c", type=int, default=10, help="Maximum number of questions to include in prompt")
-    parser.add_argument("--model", "-m", type=str, default="gpt-3.5-turbo", help="Which chatgpt model to use")
+    parser.add_argument(
+        "--frequency_penalty",
+        "-f",
+        type=float,
+        default=0,
+        help="Frequency penalty value for generating text",
+    )
+    parser.add_argument(
+        "--presence_penalty",
+        "-p",
+        type=float,
+        default=0.6,
+        help="Presence penalty value for generating text",
+    )
+    parser.add_argument(
+        "--max_contexts",
+        "-c",
+        type=int,
+        default=10,
+        help="Maximum number of questions to include in prompt",
+    )
+    parser.add_argument(
+        "--model",
+        "-m",
+        type=str,
+        default="gpt-3.5-turbo-0613",
+        help="Which chatgpt model to use",
+    )
     args = parser.parse_args()
     return args
 
@@ -224,7 +346,7 @@ def main():
         presence_penalty=args.presence_penalty,
         max_contexts=args.max_contexts,
         context_file=None,
-        model=args.model
+        model=args.model,
     )
 
 
