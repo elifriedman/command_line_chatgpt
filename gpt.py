@@ -4,7 +4,6 @@ import os
 import openai
 import argparse
 import readline
-from dotenv import load_dotenv
 from colorama import Fore, Back, Style
 from pathlib import Path
 import importlib
@@ -18,6 +17,12 @@ def load_json(f):
 
 
 # load values from the .env file if it exists
+def load_dotenv(env_path=Path(__file__).parent / ".env"):
+    with open(env_path) as f:
+        for line in f:
+            line = line.strip()
+            key, value = line.split("=")
+            os.environ[key] = value
 load_dotenv()
 
 # configure OpenAI
@@ -43,13 +48,13 @@ class Role(Enum):
 
 
 class Context:
-    def __init__(self, instructions, max_contexts: int = 10, context_file: str = None):
+    def __init__(self, instructions, max_contexts: int = 100, context_file: str = None):
         self.instructions = instructions
         self.context_file = context_file
-        self.max_contexts = 10
+        self.max_contexts = max_contexts
         self._context = []
 
-    def reset_context(self):
+    def reset(self):
         self._context = []
 
     def make_context_item(self, content, role: Role, **kwargs):
@@ -65,6 +70,25 @@ class Context:
         contexts = self._context[-self.max_contexts :]
         return [system_prompt] + contexts
 
+def run_gpt(context: Context,
+        temperature: float = 0.5,
+        max_tokens: int = 500,
+        frequency_penalty: float = 0,
+        presence_penalty: float = 0.6,
+        max_contexts: int = 10,
+        model: str = "gpt-3.5-turbo-0613",
+        **kwargs):
+    messages = context.context
+    out = openai.ChatCompletion.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                frequency_penalty=frequency_penalty,
+                presence_penalty=presence_penalty,
+                **kwargs
+            )
+    return out
 
 class QuestionAnswer:
     def __init__(
@@ -110,7 +134,7 @@ class QuestionAnswer:
         try:
             arguments = json.loads(arguments)
         except Exception as exc:
-            return f"Error parsing json '{arguments}' {exc}"
+            return f"Error calling `{function_name}`. Problem parsing json '{arguments}' {exc}"
         return self.call_method_from_file(
             file_name="functions", function_name=function_name, args=arguments
         )
@@ -120,16 +144,16 @@ class QuestionAnswer:
         self.context.add(content=new_question, role=Role.USER)
         messages = self.context.context
         try:
-            completion = openai.ChatCompletion.create(
-                model=self.model,
-                messages=messages,
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
-                top_p=1,
-                frequency_penalty=self.frequency_penalty,
-                presence_penalty=self.presence_penalty,
-                functions=self.functions,
-                function_call="auto",
+            completion = run_gpt(
+                    context=self.context,
+                    model=self.model,
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens,
+                    top_p=1,
+                    frequency_penalty=self.frequency_penalty,
+                    presence_penalty=self.presence_penalty,
+                    functions=self.functions,
+                    function_call="auto",
             )
         except openai.error.RateLimitError as exc:
             print(
