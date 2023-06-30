@@ -141,7 +141,9 @@ class QuestionAnswer:
 
     def get_response(self, new_question):
         # build the messages
-        self.context.add(content=new_question, role=Role.USER)
+        has_new_question = new_question != ""
+        if has_new_question:
+            self.context.add(content=new_question, role=Role.USER)
         messages = self.context.context
         try:
             completion = run_gpt(
@@ -169,6 +171,11 @@ class QuestionAnswer:
             function_info = completion.choices[0].message.function_call
             response = self.handle_function_call(function_info)
             self.context.add(content=response, role=Role.FUNCTION, name=function_info["name"])
+        elif completion.choices[0].finish_reason == "length":
+            current_response = completion.choices[0].message.content
+            new_response = self.get_response(new_question="")
+            self.context.add(content=response, role=Role.ASSISTANT)
+            response = current_response + new_response
         else:
             response = completion.choices[0].message.content
             self.context.add(content=response, role=Role.ASSISTANT)
@@ -301,8 +308,7 @@ def run_iteratively(
         save_conversation(f">>>>>\n{new_question}", filepath)
         response = question_answer.get_response(new_question)
         save_conversation(f"<<<<<\n{response}", filepath)
-        # print the response
-        print(Style.RESET_ALL + response)
+        print(response)
 
 
 def parse_args():
