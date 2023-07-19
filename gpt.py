@@ -76,9 +76,12 @@ def run_gpt(context: Context,
         frequency_penalty: float = 0,
         presence_penalty: float = 0.6,
         max_contexts: int = 10,
-        model: str = "gpt-3.5-turbo-0613",
+        model: str = "gpt-3.5-turbo",
         **kwargs):
     messages = context.context
+    if "functions" in kwargs and not kwargs["functions"]:
+        kwargs.pop("functions")
+        kwargs.pop("function_call", None)
     out = openai.ChatCompletion.create(
                 model=model,
                 messages=messages,
@@ -100,8 +103,8 @@ class QuestionAnswer:
         presence_penalty: float = 0.6,
         max_contexts: int = 10,
         context_file: str = None,
-        model: str = "gpt-3.5-turbo-0613",
-        function_path: Path = Path(os.path.expanduser("~/.gpt/functions")),
+        model: str = "gpt-3.5-turbo",
+        function_path: Path = None,
     ):
         self.temperature = temperature
         self.max_tokens = max_tokens
@@ -111,9 +114,11 @@ class QuestionAnswer:
         self.context = Context(instructions, max_contexts=max_contexts, context_file=context_file)
         self.model = model
         self.function_path = function_path
-        self.functions = load_json(function_path / "function_list.json")
-        if str(self.function_path) not in sys.path:
-            sys.path.append(str(self.function_path))
+        self.functions = None
+        if self.function_path is not None:
+            self.functions = load_json(function_path / "function_list.json")
+            if str(self.function_path) not in sys.path:
+                sys.path.append(str(self.function_path))
 
     def call_method_from_file(self, file_name, function_name, args):
         try:
@@ -173,8 +178,9 @@ class QuestionAnswer:
             self.context.add(content=response, role=Role.FUNCTION, name=function_info["name"])
         elif completion.choices[0].finish_reason == "length":
             current_response = completion.choices[0].message.content
-            new_response = self.get_response(new_question="")
-            self.context.add(content=response, role=Role.ASSISTANT)
+            self.context.add(content=current_response, role=Role.ASSISTANT)
+            new_response = self.get_response(new_question="continue exactly where you left off")
+            self.context.add(content=new_response, role=Role.ASSISTANT)
             response = current_response + new_response
         else:
             response = completion.choices[0].message.content
@@ -191,6 +197,7 @@ def get_moderation(question):
 
     Returns a list of errors if the question is not safe, otherwise returns None
     """
+    return None
 
     errors = {
         "hate": "Content that expresses, incites, or promotes hate based on race, gender, ethnicity, religion, nationality, sexual orientation, disability status, or caste.",
@@ -241,7 +248,7 @@ def run(
     presence_penalty: float = 0.6,
     max_contexts: int = 10,
     context_file: str = None,
-    model: str = "gpt-3.5-turbo-0613",
+    model: str = "gpt-3.5-turbo",
 ):
     question_answer = QuestionAnswer(
         instructions=instructions,
@@ -272,7 +279,7 @@ def run_iteratively(
     presence_penalty: float = 0.6,
     max_contexts: int = 10,
     context_file: str = None,
-    model: str = "gpt-3.5-turbo-0613",
+    model: str = "gpt-3.5-turbo",
     filepath: Path = Path(os.path.expanduser("~/.gpt/history.txt")),
 ):
     question_answer = QuestionAnswer(
@@ -359,7 +366,7 @@ def parse_args():
         "--model",
         "-m",
         type=str,
-        default="gpt-3.5-turbo-0613",
+        default="gpt-3.5-turbo",
         help="Which chatgpt model to use",
     )
     args = parser.parse_args()
