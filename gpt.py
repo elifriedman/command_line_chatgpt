@@ -10,6 +10,9 @@ import importlib
 import json
 from enum import Enum
 
+def save_json(obj, f, mode='w'):
+    with open(f, mode) as f:
+        return json.dump(obj, f)
 
 def load_json(f):
     with open(f) as f:
@@ -66,16 +69,72 @@ class Context:
 
     @property
     def context(self):
+        return self.get_contexts(num_contexts=self.max_contexts)
+
+    def get_contexts(self, num_contexts: int = None):
+        if num_contexts is None:
+            num_contexts = 0
         system_prompt = self.make_context_item(content=self.instructions, role=Role.SYSTEM)
-        contexts = self._context[-self.max_contexts :]
+        contexts = self._context[-num_contexts :]
         return [system_prompt] + contexts
+
+    def save(self, path):
+        save_json({"instructions": self.instructions, "contexts": self._context, "max_contexts": self.max_contexts}, path)
+
+    @classmethod
+    def load(cls, path):
+        data = load_json(path)
+        out = cls(instructions=data["instructions"], max_contexts=data["max_contexts"])
+        out._context = data["contexts"]
+        return out
+
+    def get_response(self, new_question, model='gpt-3.5-turbo'):
+        # build the messages
+        has_new_question = new_question != ""
+        if has_new_question:
+            self.add(content=new_question, role=Role.USER)
+        try:
+            completion = run_gpt(
+                    context=self,
+                    model=model,
+                    temperature=0.5,
+                    max_tokens=500,
+                    top_p=1,
+                    frequency_penalty=0,
+                    presence_penalty=0.6,
+            )
+        except openai.error.RateLimitError as exc:
+            print(
+                Fore.RED
+                + Style.BRIGHT
+                + "You're going too fast! Error: "
+                + str(exc)
+                + Style.RESET_ALL
+            )
+            return ""
+
+        if completion.choices[0].finish_reason == "function_call":
+            function_info = completion.choices[0].message.function_call
+            response = self.handle_function_call(function_info)
+            self.add(content=response, role=Role.FUNCTION, name=function_info["name"])
+        elif completion.choices[0].finish_reason == "length":
+            current_response = completion.choices[0].message.content
+            self.add(content=current_response, role=Role.ASSISTANT)
+            new_response = self.get_response(new_question="continue exactly where you left off")
+            self.add(content=new_response, role=Role.ASSISTANT)
+            response = current_response + new_response
+        else:
+            response = completion.choices[0].message.content
+            self.add(content=response, role=Role.ASSISTANT)
+        return response
+
+
 
 def run_gpt(context: Context,
         temperature: float = 0.5,
         max_tokens: int = 500,
         frequency_penalty: float = 0,
         presence_penalty: float = 0.6,
-        max_contexts: int = 10,
         model: str = "gpt-3.5-turbo",
         **kwargs):
     messages = context.context
@@ -295,7 +354,7 @@ def run_iteratively(
 
     # keep track of previous questions and answers
     save_conversation(
-        f"----- New Conversation -----" f"\n{instructions}\n----------------------------",
+        f"----- New Conversation ({model}) -----" f"\n{instructions}\n----------------------------",
         filepath,
     )
     while True:
@@ -324,7 +383,7 @@ def parse_args():
         "--instructions",
         "-i",
         type=str,
-        default=os.path.expanduser(".gpt/default_prompt.txt"),
+        default=os.path.expanduser("~/.gpt/default_prompt.txt"),
         help="Filepath for initial ChatGPT instruction prompt (default ~/.gpt/default_prompt.txt). See https://github.com/f/awesome-chatgpt-prompts for inspiration",
     )
     parser.add_argument(
