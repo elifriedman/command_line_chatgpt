@@ -7,7 +7,7 @@ with open('requirements.txt') as f:
 setup(
     name='gpt',
     version='1.0',
-    packages=['src'],
+    packages=['gpt'],
     install_requires=requirements,
     entry_points={
         'console_scripts': [
