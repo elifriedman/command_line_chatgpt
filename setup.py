@@ -11,7 +11,7 @@ setup(
     install_requires=requirements,
     entry_points={
         'console_scripts': [
-            'gpt = src.gpt:main',
+            'gpt = gpt.gpt:main',
         ],
     },
 )
