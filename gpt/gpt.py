@@ -24,6 +24,9 @@ def load_json(f):
 
 # load values from the .env file if it exists
 def load_dotenv(env_path=Path(__file__).parent / ".env"):
+    if not Path(env_path).exists():
+        print(f"{Fore.RED}!!ERROR!!{Style.RESET_ALL} Please put create a file called `~/.gpt/.env` file with your OpenAI key: OPENAI_API_KEY=sk...")
+        exit(1)
     with open(env_path) as f:
         for line in f:
             line = line.strip()

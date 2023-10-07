@@ -1,27 +1,30 @@
 # ChatGPT
 
-This is a command-line tool for controlling ChatGPT from the command line.
+This is a tool for controlling ChatGPT from the command line.
 
 ![example.png](https://github.com/elifriedman/command_line_chatgpt/blob/main/example.png)
 
 # Setup
 
-## Environment
-Make sure you have python3 installed:
+## Install
+
+### From pip
 
 ```
-python3 --version
+pip install --upgrade 'git+https://github.com/elifriedman/command_line_chatgpt.git'
 ```
 
-Create a virtual environment and install the dependencies:
+### Environment
+or you can git clone it and install the requirements
 
-Install the requirements
 ```
-pip install -r requirements.txt
+git clone https://github.com/elifriedman/command_line_chatgpt.git
+cd command_line_chatgpt
+pip install .
 ```
 
 ## API Key
-Create a file `.env` and put in your [OpenAI API Key](https://platform.openai.com/account/api-keys):
+Create a file `~/.gpt/.env` and put in your [OpenAI API Key](https://platform.openai.com/account/api-keys):
 ```
 OPENAI_API_KEY=<your OPENAI API Key>
 ```
