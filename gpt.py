@@ -3,7 +3,10 @@ import sys
 import os
 import openai
 import argparse
-import readline
+from prompt_toolkit import PromptSession, ANSI
+from prompt_toolkit.history import FileHistory
+from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
+from prompt_toolkit.key_binding import KeyBindings
 from colorama import Fore, Back, Style
 from pathlib import Path
 import importlib
@@ -277,27 +280,6 @@ def get_moderation(question):
     return None
 
 
-def get_question():
-    full_question = ""
-    current_question = ""
-    end = "///"
-    just_started = True
-    print(
-        Fore.GREEN
-        + Style.BRIGHT
-        + f"Enter prompt and then {end} to end your question:"
-        + Style.RESET_ALL
-    )
-    while end not in current_question:
-        current_question = input()
-        if just_started is False:
-            current_question = "\n" + current_question
-        full_question += f"{current_question}"
-        just_started = False
-    full_question = full_question.replace(end, "")
-    return full_question
-
-
 def run(
     instructions: str,
     question: str,
@@ -357,15 +339,32 @@ def run_iteratively(
         f"----- New Conversation ({model}) -----" f"\n{instructions}\n----------------------------",
         filepath,
     )
+    question_holder_hack = {"question": ""}
+
+    kb = KeyBindings()
+    @kb.add('tab', 'enter')
+    def _(event):
+        " When Control+Enter is pressed, accept input. "
+        question_holder_hack["question"] = event.app.current_buffer.text
+        event.app.current_buffer.append_to_history()
+        event.app.exit()
+    prompt_session = PromptSession(ANSI(Fore.GREEN + "Enter your prompt and then press <tab>-<enter>:\n" + Style.RESET_ALL),
+            key_bindings=kb,
+            history=FileHistory(os.path.expanduser("~/.gpt/input_history.txt")),
+            enable_history_search=True,
+            auto_suggest=AutoSuggestFromHistory(),
+            multiline=True,
+            prompt_continuation="")
     while True:
-        new_question = get_question()
+        prompt_session.prompt()
+        new_question = question_holder_hack["question"]
         print(Fore.CYAN + "Processing..." + Style.RESET_ALL)
         # ask the user for their question
         # check the question is safe
         errors = get_moderation(new_question)
         if errors:
             print(
-                Fore.RED + Style.BRIGHT + "Sorry, you're question didn't pass the moderation check:"
+                Fore.RED + Style.BRIGHT + "Sorry, your question didn't pass the moderation check:"
             )
             for error in errors:
                 print(error)
