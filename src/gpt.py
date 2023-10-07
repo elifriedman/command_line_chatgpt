@@ -358,7 +358,10 @@ def run_iteratively(
             multiline=True,
             prompt_continuation="")
     while True:
-        prompt_session.prompt()
+        try:
+            prompt_session.prompt()
+        except KeyboardInterrupt:
+            return
         new_question = question_holder_hack["question"]
         print(Fore.CYAN + "Processing..." + Style.RESET_ALL)
         # ask the user for their question
