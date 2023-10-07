@@ -29,7 +29,9 @@ def load_dotenv(env_path=Path(__file__).parent / ".env"):
             line = line.strip()
             key, value = line.split("=")
             os.environ[key] = value
-load_dotenv()
+base_path = Path(os.path.expanduser("~/.gpt"))
+base_path.mkdir(exist_ok=True)
+load_dotenv(env_path=base_path / ".env")
 
 # configure OpenAI
 openai.api_key = os.getenv("OPENAI_API_KEY")
