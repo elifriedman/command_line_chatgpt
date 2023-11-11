@@ -2,6 +2,7 @@
 import sys
 import os
 import openai
+from openai import OpenAI
 import argparse
 from prompt_toolkit import PromptSession, ANSI
 from prompt_toolkit.history import FileHistory
@@ -36,8 +37,6 @@ base_path = Path(os.path.expanduser("~/.gpt"))
 base_path.mkdir(exist_ok=True)
 load_dotenv(env_path=base_path / ".env")
 
-# configure OpenAI
-openai.api_key = os.getenv("OPENAI_API_KEY")
 
 
 def read_instructions(path):
@@ -111,7 +110,7 @@ class Context:
                     frequency_penalty=0,
                     presence_penalty=0.6,
             )
-        except openai.error.RateLimitError as exc:
+        except openai.RateLimitError as exc:
             print(
                 Fore.RED
                 + Style.BRIGHT
@@ -145,11 +144,12 @@ def run_gpt(context: Context,
         presence_penalty: float = 0.6,
         model: str = "gpt-3.5-turbo",
         **kwargs):
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     messages = context.context
     if "functions" in kwargs and not kwargs["functions"]:
         kwargs.pop("functions")
         kwargs.pop("function_call", None)
-    out = openai.ChatCompletion.create(
+    out = client.chat.completions.create(
                 model=model,
                 messages=messages,
                 temperature=temperature,
@@ -229,7 +229,7 @@ class QuestionAnswer:
                     functions=self.functions,
                     function_call="auto",
             )
-        except openai.error.RateLimitError as exc:
+        except openai.RateLimitError as exc:
             print(
                 Fore.RED
                 + Style.BRIGHT
