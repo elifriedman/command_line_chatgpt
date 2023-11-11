@@ -218,7 +218,7 @@ class QuestionAnswer:
             messages = self.context.context
         elif has_new_question and add_to_context is False:
             messages = self.context.context
-            messages += self.context.make_context_item(content=new_question, role=Role.USER)
+            messages.append(self.context.make_context_item(content=new_question, role=Role.USER))
         else:
             messages = self.context.context
         return messages
