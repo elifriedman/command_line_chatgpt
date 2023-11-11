@@ -211,12 +211,23 @@ class QuestionAnswer:
             file_name="functions", function_name=function_name, args=arguments
         )
 
-    def get_response(self, new_question):
-        # build the messages
+    def get_messages(self, new_question = "", add_to_context: bool = True):
         has_new_question = new_question != ""
-        if has_new_question:
+        if has_new_question and add_to_context is True:
             self.context.add(content=new_question, role=Role.USER)
-        messages = self.context.context
+            messages = self.context.context
+        elif has_new_question and add_to_context is False:
+            messages = self.context.context
+            messages += self.context.make_context_item(content=new_question, role=Role.USER)
+        else:
+            messages = self.context.context
+        return messages
+
+
+    def get_response(self, new_question, add_to_context: bool = True):
+        # build the messages
+        messages = self.get_messages(new_question, add_to_context=add_to_context)
+
         try:
             completion = run_gpt(
                     context=self.context,
@@ -242,16 +253,21 @@ class QuestionAnswer:
         if completion.choices[0].finish_reason == "function_call":
             function_info = completion.choices[0].message.function_call
             response = self.handle_function_call(function_info)
-            self.context.add(content=response, role=Role.FUNCTION, name=function_info["name"])
+            if add_to_context:
+                self.context.add(content=response, role=Role.FUNCTION, name=function_info["name"])
         elif completion.choices[0].finish_reason == "length":
-            current_response = completion.choices[0].message.content
-            self.context.add(content=current_response, role=Role.ASSISTANT)
-            new_response = self.get_response(new_question="continue exactly where you left off")
-            self.context.add(content=new_response, role=Role.ASSISTANT)
-            response = current_response + new_response
+            print(Fore.RED + "RESPONSE REACHED MAX LENGTH" + Style.RESET_ALL)
+            response = completion.choices[0].message.content
+            if add_to_context:
+                self.context.add(content=response, role=Role.ASSISTANT)
+            # current_response = completion.choices[0].message.content
+            # self.context.add(content=current_response, role=Role.ASSISTANT)
+            # new_response = self.get_response(new_question=f"Continue your previous response. DO NOT SAY 'Sure, I'll continue' or anything of the sort, just continue from: \"{current_response[-40:]}...\"")
+            # response = current_response + new_response
         else:
             response = completion.choices[0].message.content
-            self.context.add(content=response, role=Role.ASSISTANT)
+            if add_to_context:
+                self.context.add(content=response, role=Role.ASSISTANT)
         return response
 
 
