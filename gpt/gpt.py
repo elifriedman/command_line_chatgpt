@@ -457,6 +457,9 @@ def parse_args():
 
 def main():
     args = parse_args()
+    model = args.model
+    if model == "gpt-4":
+        model = "gpt-4-1106-preview"
     run_iteratively(
         instructions=read_instructions(args.instructions),
         temperature=args.temperature,
@@ -465,7 +468,7 @@ def main():
         presence_penalty=args.presence_penalty,
         max_contexts=args.max_contexts,
         context_file=None,
-        model=args.model,
+        model=model,
     )
 
 

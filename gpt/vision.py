@@ -3,10 +3,21 @@ import requests
 import base64
 import mimetypes
 from pathlib import Path
+from PIL import Image
 from openai import OpenAI
 from .gpt import load_dotenv, base_path
+import numpy as np
 
 load_dotenv(env_path=base_path / ".env")
+
+def image_to_base64(image):
+    is_pil = isinstance(image, Image.Image)
+    image = image if is_pil else Image.fromarray(image)
+    buffered = io.BytesIO()
+    image.save(buffered, format="PNG")
+    img_base64 = "data:image/png;base64," + str(base64.b64encode(buffered.getvalue()), "utf-8")
+    return img_base64
+
 
 class ChatSession:
     def __init__(self, model="gpt-4-vision-preview", max_tokens=300):
@@ -16,7 +27,7 @@ class ChatSession:
         self.messages = []
 
     @staticmethod
-    def encode_image(image_path):
+    def encode_image_from_file(image_path):
         if not os.path.isfile(image_path):
             raise FileNotFoundError(f"The file {image_path} does not exist.")
         mime_type, _ = mimetypes.guess_type(image_path)
@@ -50,7 +61,10 @@ class ChatSession:
     def add_message(self, content, role="user"):
         message_type = "text"
         if Path(content).exists():
-            content = {"url": self.encode_image(content)}
+            content = {"url": self.encode_image_from_file(content)}
+            message_type = "image_url"
+        elif isinstance(content, Image.Image) or isinstance(content, np.ndarray):
+            content = {"url": image_to_base64(content)}
             message_type = "image_url"
         elif isinstance(content, str) and content.startswith("http"):
             self.validate_image_url(content['image_url'])
