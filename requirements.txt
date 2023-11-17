@@ -1,3 +1,5 @@
 openai
 colorama
 prompt_toolkit
+Pillow
+numpy
