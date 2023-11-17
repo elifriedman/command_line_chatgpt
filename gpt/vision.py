@@ -60,11 +60,11 @@ class ChatSession:
 
     def add_message(self, content, role="user"):
         message_type = "text"
-        if Path(content).exists():
-            content = {"url": self.encode_image_from_file(content)}
-            message_type = "image_url"
-        elif isinstance(content, Image.Image) or isinstance(content, np.ndarray):
+        if isinstance(content, Image.Image) or isinstance(content, np.ndarray):
             content = {"url": image_to_base64(content)}
+            message_type = "image_url"
+        elif type(content) in [str, Path] and Path(content).exists():
+            content = {"url": self.encode_image_from_file(content)}
             message_type = "image_url"
         elif isinstance(content, str) and content.startswith("http"):
             self.validate_image_url(content['image_url'])
