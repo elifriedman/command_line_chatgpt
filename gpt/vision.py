@@ -65,7 +65,7 @@ class ChatSession:
         if isinstance(content, Image.Image) or isinstance(content, np.ndarray):
             content = {"url": image_to_base64(content)}
             message_type = "image_url"
-        elif type(content) in [str, Path] and Path(content).exists():
+        elif type(content) in [str, Path] and os.path.exists(content):
             content = {"url": self.encode_image_from_file(content)}
             message_type = "image_url"
         elif isinstance(content, str) and content.startswith("http"):
