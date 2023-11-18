@@ -38,12 +38,13 @@ class ChatSession:
             base64_image = base64.b64encode(image_file.read()).decode('utf-8')
             return f"data:{mime_type};base64,{base64_image}"
 
-    def create_chat_completion(self):
+    def create_chat_completion(self, **kwargs):
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=self.messages,
                 max_tokens=self.max_tokens,
+                **kwargs
             )
             return response
         except Exception as e:
