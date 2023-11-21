@@ -20,7 +20,7 @@ def image_to_base64(image):
     return img_base64
 
 
-class ChatSession:
+class ImageChatSession:
     def __init__(self, model="gpt-4-vision-preview", max_tokens=300):
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         self.model = model
