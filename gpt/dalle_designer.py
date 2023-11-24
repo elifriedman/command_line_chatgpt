@@ -1,4 +1,5 @@
 # coding: utf-8
+import argparse
 import os
 import json
 import base64
@@ -7,19 +8,20 @@ from enum import Enum
 from typing import Union
 from dataclasses import dataclass
 from openai import OpenAI
-from gpt.gpt import base_path
+from .gpt import base_path
 from PIL import Image
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-def save_json(obj, f):
+def save_json(obj, f, pretty: bool=True):
+    indent = 4 if pretty is True else None
     with open(f, 'w') as f:
-        json.dump(obj, f)
+        json.dump(obj, f, indent=indent)
         
 class Size(Enum):
     SQUARE = "1024x1024"
-    VERTICAL = "1792x1024"
-    HORIZONTAL = "1024x1792"
+    HORIZONTAL = "1792x1024"
+    VERTICAL = "1024x1792"
 
 
 class Style(Enum):
@@ -67,9 +69,16 @@ def run_dalle(prompt, output_path, quality: Union[Quality, str] = Quality.HD, si
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("prompt")
-    parser.add_argument("--output", "-o")
+    parser.add_argument("output")
+    parser.add_argument("--size", "-s", default=Size.SQUARE, choices=[s.value for s in Size])
+    parser.add_argument("--quality", "-q", default=Quality.HD, choices=[s.value for s in Quality])
+    parser.add_argument("--style", "-y", default=Style.VIVID, choices=[s.value for s in Style])
+
     return parser.parse_args()
 
-if __name__ == "__main__":
+def main():
     args = parse_args()
-    des
+    run_dalle(args.prompt, args.output, quality=args.quality, size=args.size, style=args.style)
+
+if __name__ == "__main__":
+    main()

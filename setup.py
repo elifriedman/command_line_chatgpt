@@ -7,12 +7,13 @@ with open('requirements.txt') as f:
 
 setup(
     name='gpt',
-    version='1.2.0',
+    version='1.2.1',
     packages=['gpt'],
     install_requires=requirements,
     entry_points={
         'console_scripts': [
             'gpt = gpt.gpt:main',
+            'dalle = gpt.dalle_designer:main',
         ],
     },
 )

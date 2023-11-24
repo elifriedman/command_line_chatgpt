@@ -33,6 +33,8 @@ def load_dotenv(env_path=Path(__file__).parent / ".env"):
             line = line.strip()
             key, value = line.split("=")
             os.environ[key] = value
+
+
 base_path = Path(os.path.expanduser("~/.gpt"))
 base_path.mkdir(exist_ok=True)
 load_dotenv(env_path=base_path / ".env")
