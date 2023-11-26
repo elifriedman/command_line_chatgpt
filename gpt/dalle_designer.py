@@ -19,6 +19,7 @@ def save_json(obj, f, pretty: bool=True):
         json.dump(obj, f, indent=indent)
         
 class Size(Enum):
+    SQUARE_SMALL = "512x512"
     SQUARE = "1024x1024"
     HORIZONTAL = "1792x1024"
     VERTICAL = "1024x1792"
@@ -38,7 +39,7 @@ class DalleResult:
     prompt: str
     revised_prompt: str
 
-def generate_dalle_image(prompt, quality: Union[Quality, str] = Quality.HD, size: Union[Size, str] = Size.SQUARE, style: Union[Style, str] = Style.VIVID):
+def generate_dalle_image(prompt, model: str = "dall-e-3", quality: Union[Quality, str] = Quality.HD, size: Union[Size, str] = Size.SQUARE, style: Union[Style, str] = Style.VIVID):
     if isinstance(quality, Quality):
         quality = quality.value
     if isinstance(size, Size):
@@ -46,7 +47,7 @@ def generate_dalle_image(prompt, quality: Union[Quality, str] = Quality.HD, size
     if isinstance(style, Style):
         style = style.value
     response = client.images.generate(
-        model="dall-e-3",
+        model=model,
         size=size,
         quality=quality,
         style=style,
@@ -61,7 +62,7 @@ def generate_dalle_image(prompt, quality: Union[Quality, str] = Quality.HD, size
     return DalleResult(image, prompt=prompt, revised_prompt=revised_prompt)
 
 def run_dalle(prompt, output_path, quality: Union[Quality, str] = Quality.HD, size: Union[Size, str] = Size.SQUARE, style: Union[Style, str] = Style.VIVID):
-    result = generate_dalle_image(prompt, quality, size, style)
+    result = generate_dalle_image(prompt, quality=quality, size=size, style=style)
     result.image.save(output_path)
     output_json_path = output_path[:output_path.rfind(".")]
     save_json({"prompt": result.prompt, "revised_prompt": result.revised_prompt}, f"{output_json_path}.json")
