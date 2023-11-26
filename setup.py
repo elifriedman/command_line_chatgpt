@@ -7,7 +7,7 @@ with open('requirements.txt') as f:
 
 setup(
     name='gpt',
-    version='1.2.1',
+    version='1.2.2',
     packages=['gpt'],
     install_requires=requirements,
     entry_points={
