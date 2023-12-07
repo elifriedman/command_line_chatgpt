@@ -60,7 +60,7 @@ class ImageChatSession:
         except requests.RequestException as e:
             raise ValueError(f"An error occurred while validating the URL: {e}")
 
-    def add_message(self, content, role="user"):
+    def add_message(self, content, role="user", index=None):
         message_type = "text"
         if isinstance(content, Image.Image) or isinstance(content, np.ndarray):
             content = {"url": image_to_base64(content)}
@@ -69,7 +69,10 @@ class ImageChatSession:
             content = {"url": self.encode_image_from_file(content)}
             message_type = "image_url"
         elif isinstance(content, str) and content.startswith("http"):
-            self.validate_image_url(content['image_url'])
+            self.validate_image_url(content)
             message_type = "image_url"
             content = {"url": content}
-        self.messages.append({"role": role, "content": [{"type": message_type, message_type: content}]})
+        if index is None:
+            self.messages.append({"role": role, "content": [{"type": message_type, message_type: content}]})
+        else:
+            self.messages[index] = {"role": role, "content": [{"type": message_type, message_type: content}]}
