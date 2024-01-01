@@ -226,7 +226,7 @@ class QuestionAnswer:
         return messages
 
 
-    def get_response(self, new_question, add_to_context: bool = True):
+    def get_response(self, new_question, add_to_context: bool = True, **kwargs):
         # build the messages
         messages = self.get_messages(new_question, add_to_context=add_to_context)
 
@@ -241,6 +241,7 @@ class QuestionAnswer:
                     presence_penalty=self.presence_penalty,
                     functions=self.functions,
                     function_call="auto",
+                    **kwargs
             )
         except openai.RateLimitError as exc:
             print(
