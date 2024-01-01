@@ -120,7 +120,7 @@ class Context:
         frequency_penalty: float = 0,
         presence_penalty: float = 0.6,
         seed: int = None,
-        max_contexts: int = None
+        max_contexts: int = None,
         **kwargs,
     ):
         # build the messages
