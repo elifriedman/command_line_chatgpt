@@ -168,7 +168,7 @@ def run_gpt(
     frequency_penalty: float = 0,
     presence_penalty: float = 0.6,
     model: str = "gpt-3.5-turbo",
-    seed: None
+    seed: int = None,
     **kwargs,
 ):
     if model == "gpt-4":
