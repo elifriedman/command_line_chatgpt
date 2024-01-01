@@ -84,10 +84,15 @@ class Context:
         return self.get_contexts(num_contexts=self.max_contexts)
 
     def get_contexts(self, num_contexts: int = None):
+        start_index = num_contexts
+        end_index = None
         if num_contexts is None:
-            num_contexts = 0
+            start_index = 0
+        elif num_contexts == 0:
+            start_index = 0
+            end_index = 0
         system_prompt = self.make_context_item(content=self.instructions, role=Role.SYSTEM)
-        contexts = self._context[-num_contexts:]
+        contexts = self._context[-start_index:end_index]
         return [system_prompt] + contexts
 
     def to_dict(self):
