@@ -14,9 +14,11 @@ import importlib
 import json
 from enum import Enum
 
-def save_json(obj, f, mode='w'):
+
+def save_json(obj, f, mode="w"):
     with open(f, mode) as f:
         return json.dump(obj, f)
+
 
 def load_json(f):
     with open(f) as f:
@@ -26,7 +28,9 @@ def load_json(f):
 # load values from the .env file if it exists
 def load_dotenv(env_path=Path(__file__).parent / ".env"):
     if not Path(env_path).exists():
-        print(f"{Fore.RED}!!ERROR!!{Style.RESET_ALL} Please put create a file called `~/.gpt/.env` file with your OpenAI key: OPENAI_API_KEY=sk...")
+        print(
+            f"{Fore.RED}!!ERROR!!{Style.RESET_ALL} Please put create a file called `~/.gpt/.env` file with your OpenAI key: OPENAI_API_KEY=sk..."
+        )
         exit(1)
     with open(env_path) as f:
         for line in f:
@@ -38,7 +42,6 @@ def load_dotenv(env_path=Path(__file__).parent / ".env"):
 base_path = Path(os.path.expanduser("~/.gpt"))
 base_path.mkdir(exist_ok=True)
 load_dotenv(env_path=base_path / ".env")
-
 
 
 def read_instructions(path):
@@ -84,11 +87,15 @@ class Context:
         if num_contexts is None:
             num_contexts = 0
         system_prompt = self.make_context_item(content=self.instructions, role=Role.SYSTEM)
-        contexts = self._context[-num_contexts :]
+        contexts = self._context[-num_contexts:]
         return [system_prompt] + contexts
 
     def to_dict(self):
-        return {"instructions": self.instructions, "contexts": self._context, "max_contexts": self.max_contexts}
+        return {
+            "instructions": self.instructions,
+            "contexts": self._context,
+            "max_contexts": self.max_contexts,
+        }
 
     @classmethod
     def from_dict(cls, data):
@@ -104,32 +111,40 @@ class Context:
         data = load_json(path)
         return cls.from_dict(data)
 
-    def get_response(self, new_question="", model: str='gpt-3.5-turbo', temperature: float = 0.5,
+    def get_response(
+        self,
+        new_question="",
+        model: str = "gpt-3.5-turbo",
+        temperature: float = 0.5,
         max_tokens: int = 500,
         frequency_penalty: float = 0,
         presence_penalty: float = 0.6,
-        **kwargs):
+        seed: int = None,
+        max_contexts: int = None
+        **kwargs,
+    ):
         # build the messages
         has_new_question = new_question != ""
         if has_new_question:
             self.add(content=new_question, role=Role.USER)
         try:
+            if max_contexts is not None:
+                old_max = self.max_contexts
+                self.max_contexts = max_contexts
             completion = run_gpt(
-                    context=self,
-                    model=model,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    frequency_penalty=frequency_penalty,
-                    presence_penalty=presence_penalty, **kwargs
+                context=self,
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                frequency_penalty=frequency_penalty,
+                presence_penalty=presence_penalty,
+                seed=seed,
+                **kwargs,
             )
+            if max_contexts is not None:
+                self.max_contexts = old_max
         except openai.RateLimitError as exc:
-            print(
-                Fore.RED
-                + Style.BRIGHT
-                + "You're going too fast! Error: "
-                + str(exc)
-                + Style.RESET_ALL
-            )
+            print(Fore.RED + Style.BRIGHT + "You're going too fast! Error: " + str(exc) + Style.RESET_ALL)
             return ""
 
         if completion.choices[0].finish_reason == "function_call":
@@ -146,14 +161,16 @@ class Context:
         return response
 
 
-
-def run_gpt(context: Context,
-        temperature: float = 0.5,
-        max_tokens: int = 500,
-        frequency_penalty: float = 0,
-        presence_penalty: float = 0.6,
-        model: str = "gpt-3.5-turbo",
-        **kwargs):
+def run_gpt(
+    context: Context,
+    temperature: float = 0.5,
+    max_tokens: int = 500,
+    frequency_penalty: float = 0,
+    presence_penalty: float = 0.6,
+    model: str = "gpt-3.5-turbo",
+    seed: None
+    **kwargs,
+):
     if model == "gpt-4":
         model = "gpt-4-1106-preview"
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -162,15 +179,17 @@ def run_gpt(context: Context,
         kwargs.pop("functions")
         kwargs.pop("function_call", None)
     out = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                frequency_penalty=frequency_penalty,
-                presence_penalty=presence_penalty,
-                **kwargs
-            )
+        model=model,
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        frequency_penalty=frequency_penalty,
+        presence_penalty=presence_penalty,
+        seed=seed,
+        **kwargs,
+    )
     return out
+
 
 class QuestionAnswer:
     def __init__(
@@ -219,11 +238,9 @@ class QuestionAnswer:
             arguments = json.loads(arguments)
         except Exception as exc:
             return f"Error calling `{function_name}`. Problem parsing json '{arguments}' {exc}"
-        return self.call_method_from_file(
-            file_name="functions", function_name=function_name, args=arguments
-        )
+        return self.call_method_from_file(file_name="functions", function_name=function_name, args=arguments)
 
-    def get_messages(self, new_question = "", add_to_context: bool = True):
+    def get_messages(self, new_question="", add_to_context: bool = True):
         has_new_question = new_question != ""
         if has_new_question and add_to_context is True:
             self.context.add(content=new_question, role=Role.USER)
@@ -235,32 +252,25 @@ class QuestionAnswer:
             messages = self.context.context
         return messages
 
-
     def get_response(self, new_question, add_to_context: bool = True, **kwargs):
         # build the messages
         messages = self.get_messages(new_question, add_to_context=add_to_context)
 
         try:
             completion = run_gpt(
-                    context=self.context,
-                    model=self.model,
-                    temperature=self.temperature,
-                    max_tokens=self.max_tokens,
-                    top_p=1,
-                    frequency_penalty=self.frequency_penalty,
-                    presence_penalty=self.presence_penalty,
-                    functions=self.functions,
-                    function_call="auto",
-                    **kwargs
+                context=self.context,
+                model=self.model,
+                temperature=self.temperature,
+                max_tokens=self.max_tokens,
+                top_p=1,
+                frequency_penalty=self.frequency_penalty,
+                presence_penalty=self.presence_penalty,
+                functions=self.functions,
+                function_call="auto",
+                **kwargs,
             )
         except openai.RateLimitError as exc:
-            print(
-                Fore.RED
-                + Style.BRIGHT
-                + "You're going too fast! Error: "
-                + str(exc)
-                + Style.RESET_ALL
-            )
+            print(Fore.RED + Style.BRIGHT + "You're going too fast! Error: " + str(exc) + Style.RESET_ALL)
             return ""
 
         if completion.choices[0].finish_reason == "function_call":
@@ -307,9 +317,7 @@ def get_moderation(question):
     response = openai.Moderation.create(input=question)
     if response.results[0].flagged:
         # get the categories that are flagged and generate a message
-        result = [
-            error for category, error in errors.items() if response.results[0].categories[category]
-        ]
+        result = [error for category, error in errors.items() if response.results[0].categories[category]]
         return result
     return None
 
@@ -376,19 +384,23 @@ def run_iteratively(
     question_holder_hack = {"question": ""}
 
     kb = KeyBindings()
-    @kb.add('tab', 'enter')
+
+    @kb.add("tab", "enter")
     def _(event):
-        " When Control+Enter is pressed, accept input. "
+        "When Control+Enter is pressed, accept input."
         question_holder_hack["question"] = event.app.current_buffer.text
         event.app.current_buffer.append_to_history()
         event.app.exit()
-    prompt_session = PromptSession(ANSI(Fore.GREEN + "Enter your prompt and then press <tab>-<enter>:\n" + Style.RESET_ALL),
-            key_bindings=kb,
-            history=FileHistory(os.path.expanduser("~/.gpt/input_history.txt")),
-            enable_history_search=True,
-            auto_suggest=AutoSuggestFromHistory(),
-            multiline=True,
-            prompt_continuation="")
+
+    prompt_session = PromptSession(
+        ANSI(Fore.GREEN + "Enter your prompt and then press <tab>-<enter>:\n" + Style.RESET_ALL),
+        key_bindings=kb,
+        history=FileHistory(os.path.expanduser("~/.gpt/input_history.txt")),
+        enable_history_search=True,
+        auto_suggest=AutoSuggestFromHistory(),
+        multiline=True,
+        prompt_continuation="",
+    )
     while True:
         try:
             prompt_session.prompt()
@@ -400,9 +412,7 @@ def run_iteratively(
         # check the question is safe
         errors = get_moderation(new_question)
         if errors:
-            print(
-                Fore.RED + Style.BRIGHT + "Sorry, your question didn't pass the moderation check:"
-            )
+            print(Fore.RED + Style.BRIGHT + "Sorry, your question didn't pass the moderation check:")
             for error in errors:
                 print(error)
             print(Style.RESET_ALL)
