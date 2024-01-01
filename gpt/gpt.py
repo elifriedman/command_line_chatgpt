@@ -87,17 +87,28 @@ class Context:
         contexts = self._context[-num_contexts :]
         return [system_prompt] + contexts
 
-    def save(self, path):
-        save_json({"instructions": self.instructions, "contexts": self._context, "max_contexts": self.max_contexts}, path)
+    def to_dict(self):
+        return {"instructions": self.instructions, "contexts": self._context, "max_contexts": self.max_contexts}
 
     @classmethod
-    def load(cls, path):
-        data = load_json(path)
+    def from_dict(cls, data):
         out = cls(instructions=data["instructions"], max_contexts=data["max_contexts"])
         out._context = data["contexts"]
         return out
 
-    def get_response(self, new_question, model='gpt-3.5-turbo'):
+    def save(self, path):
+        save_json(self.to_dict(), path)
+
+    @classmethod
+    def load(cls, path):
+        data = load_json(path)
+        return cls.from_dict(data)
+
+    def get_response(self, new_question, model: str='gpt-3.5-turbo', temperature: float = 0.5,
+        max_tokens: int = 500,
+        frequency_penalty: float = 0,
+        presence_penalty: float = 0.6,
+        **kwargs):
         # build the messages
         has_new_question = new_question != ""
         if has_new_question:
@@ -106,11 +117,10 @@ class Context:
             completion = run_gpt(
                     context=self,
                     model=model,
-                    temperature=0.5,
-                    max_tokens=500,
-                    top_p=1,
-                    frequency_penalty=0,
-                    presence_penalty=0.6,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    frequency_penalty=frequency_penalty,
+                    presence_penalty=presence_penalty, **kwargs
             )
         except openai.RateLimitError as exc:
             print(
@@ -129,9 +139,7 @@ class Context:
         elif completion.choices[0].finish_reason == "length":
             current_response = completion.choices[0].message.content
             self.add(content=current_response, role=Role.ASSISTANT)
-            new_response = self.get_response(new_question="continue exactly where you left off")
-            self.add(content=new_response, role=Role.ASSISTANT)
-            response = current_response + new_response
+            response = f"{current_response}||cutoff {max_tokens}||"
         else:
             response = completion.choices[0].message.content
             self.add(content=response, role=Role.ASSISTANT)
@@ -146,6 +154,8 @@ def run_gpt(context: Context,
         presence_penalty: float = 0.6,
         model: str = "gpt-3.5-turbo",
         **kwargs):
+    if model == "gpt-4":
+        model = "gpt-4-1106-preview"
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     messages = context.context
     if "functions" in kwargs and not kwargs["functions"]:
@@ -259,7 +269,7 @@ class QuestionAnswer:
             if add_to_context:
                 self.context.add(content=response, role=Role.FUNCTION, name=function_info["name"])
         elif completion.choices[0].finish_reason == "length":
-            print(Fore.RED + "RESPONSE REACHED MAX LENGTH" + Style.RESET_ALL)
+            print(Fore.RED + "RESPONSE REACHED MAX LENGTH: {self.max_tokens}" + Style.RESET_ALL)
             response = completion.choices[0].message.content
             if add_to_context:
                 self.context.add(content=response, role=Role.ASSISTANT)
