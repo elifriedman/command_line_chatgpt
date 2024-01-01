@@ -104,7 +104,7 @@ class Context:
         data = load_json(path)
         return cls.from_dict(data)
 
-    def get_response(self, new_question, model: str='gpt-3.5-turbo', temperature: float = 0.5,
+    def get_response(self, new_question="", model: str='gpt-3.5-turbo', temperature: float = 0.5,
         max_tokens: int = 500,
         frequency_penalty: float = 0,
         presence_penalty: float = 0.6,
