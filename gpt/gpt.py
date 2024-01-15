@@ -174,11 +174,13 @@ def run_gpt(
     presence_penalty: float = 0.6,
     model: str = "gpt-3.5-turbo",
     seed: int = None,
+    api_key: str = None,
     **kwargs,
 ):
     if model == "gpt-4":
         model = "gpt-4-1106-preview"
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    api_key = api_key if api_key is not None else os.getenv("OPENAI_API_KEY")
+    client = OpenAI(api_key=api_key)
     messages = context.context
     if "functions" in kwargs and not kwargs["functions"]:
         kwargs.pop("functions")
