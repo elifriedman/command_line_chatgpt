@@ -126,12 +126,15 @@ class Context:
         presence_penalty: float = 0.6,
         seed: int = None,
         max_contexts: int = None,
+        respond_with_json: bool = False
         **kwargs,
     ):
         # build the messages
         has_new_question = new_question != ""
         if has_new_question:
             self.add(content=new_question, role=Role.USER)
+        if response_with_json is True:
+            kwargs["response_format"] = {"type": "json_object"}
         try:
             if max_contexts is not None:
                 old_max = self.max_contexts
