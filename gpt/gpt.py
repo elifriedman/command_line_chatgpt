@@ -126,7 +126,7 @@ class Context:
         presence_penalty: float = 0.6,
         seed: int = None,
         max_contexts: int = None,
-        respond_with_json: bool = False
+        respond_with_json: bool = False,
         **kwargs,
     ):
         # build the messages
