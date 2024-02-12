@@ -61,6 +61,23 @@ def generate_dalle_image(prompt, model: str = "dall-e-3", quality: Union[Quality
     image = Image.open(io.BytesIO(image_bytes))
     return DalleResult(image, prompt=prompt, revised_prompt=revised_prompt)
 
+def edit_dalle_image(prompt, image, mask, model: str = "dall-e-2",  size: Union[Size, str] = Size.SQUARE):
+    if isinstance(size, Size):
+        size = size.value
+    response = client.images.edit(
+        model=model,
+        image=image,
+        mask=mask,
+        size=size,
+        n=1,
+        prompt=prompt,
+        response_format="b64_json"
+    )
+    image_str = response.data[0].b64_json
+    image_bytes = base64.b64decode(image_str)
+    image = Image.open(io.BytesIO(image_bytes))
+    return DalleResult(image, prompt=prompt, revised_prompt=None)
+
 def run_dalle(prompt, output_path, quality: Union[Quality, str] = Quality.HD, size: Union[Size, str] = Size.SQUARE, style: Union[Style, str] = Style.VIVID):
     result = generate_dalle_image(prompt, quality=quality, size=size, style=style)
     result.image.save(output_path)
