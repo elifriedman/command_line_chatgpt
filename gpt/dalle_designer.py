@@ -61,9 +61,20 @@ def generate_dalle_image(prompt, model: str = "dall-e-3", quality: Union[Quality
     image = Image.open(io.BytesIO(image_bytes))
     return DalleResult(image, prompt=prompt, revised_prompt=revised_prompt)
 
+def img2bytes(img):
+    b = io.BytesIO()
+    if isinstance(img, np.ndarray):
+        img = Image.fromarray(img)
+    img.save(b, format="PNG")
+    return b
+
 def edit_dalle_image(prompt, image, mask, model: str = "dall-e-2",  size: Union[Size, str] = Size.SQUARE):
     if isinstance(size, Size):
         size = size.value
+    if isinstance(image, Image) or isinstance(image, np.ndarray):
+        image = img2bytes(image)
+    if isinstance(mask, Image) or isinstance(mask, np.ndarray):
+        mask = img2bytes(mask)
     response = client.images.edit(
         model=model,
         image=image,
