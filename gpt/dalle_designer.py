@@ -8,8 +8,9 @@ from enum import Enum
 from typing import Union
 from dataclasses import dataclass
 from openai import OpenAI
-from .gpt import base_path
 from PIL import Image
+import numpy as np
+from .gpt import base_path
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -71,9 +72,9 @@ def img2bytes(img):
 def edit_dalle_image(prompt, image, mask, model: str = "dall-e-2",  size: Union[Size, str] = Size.SQUARE):
     if isinstance(size, Size):
         size = size.value
-    if isinstance(image, Image) or isinstance(image, np.ndarray):
+    if isinstance(image, Image.Image) or isinstance(image, np.ndarray):
         image = img2bytes(image)
-    if isinstance(mask, Image) or isinstance(mask, np.ndarray):
+    if isinstance(mask, Image.Image) or isinstance(mask, np.ndarray):
         mask = img2bytes(mask)
     response = client.images.edit(
         model=model,

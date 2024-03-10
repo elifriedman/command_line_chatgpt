@@ -126,15 +126,13 @@ class Context:
         presence_penalty: float = 0.6,
         seed: int = None,
         max_contexts: int = None,
-        respond_with_json: bool = False,
+        json_output: bool = False,
         **kwargs,
     ):
         # build the messages
         has_new_question = new_question != ""
         if has_new_question:
             self.add(content=new_question, role=Role.USER)
-        if response_with_json is True:
-            kwargs["response_format"] = {"type": "json_object"}
         try:
             if max_contexts is not None:
                 old_max = self.max_contexts
@@ -147,6 +145,7 @@ class Context:
                 frequency_penalty=frequency_penalty,
                 presence_penalty=presence_penalty,
                 seed=seed,
+                json_output=json_output,
                 **kwargs,
             )
             if max_contexts is not None:
@@ -178,10 +177,13 @@ def run_gpt(
     model: str = "gpt-3.5-turbo",
     seed: int = None,
     api_key: str = None,
+    json_output: bool = False
     **kwargs,
 ):
     if model == "gpt-4":
         model = "gpt-4-1106-preview"
+    if json_output is True:
+        kwargs["response_format"] = {"type": "json_object"}
     api_key = api_key if api_key is not None else os.getenv("OPENAI_API_KEY")
     client = OpenAI(api_key=api_key)
     messages = context.context

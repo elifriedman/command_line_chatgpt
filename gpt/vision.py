@@ -38,7 +38,9 @@ class ImageChatSession:
             base64_image = base64.b64encode(image_file.read()).decode('utf-8')
             return f"data:{mime_type};base64,{base64_image}"
 
-    def create_chat_completion(self, **kwargs):
+    def create_chat_completion(self, json_output: bool = False, **kwargs):
+        if json_output is True:
+            kwargs["response_format"] = {"type": "json_object"}
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
