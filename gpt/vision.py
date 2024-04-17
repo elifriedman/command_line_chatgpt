@@ -38,9 +38,7 @@ class ImageChatSession:
             base64_image = base64.b64encode(image_file.read()).decode('utf-8')
             return f"data:{mime_type};base64,{base64_image}"
 
-    def create_chat_completion(self, json_output: bool = False, **kwargs):
-        if json_output is True:
-            kwargs["response_format"] = {"type": "json_object"}
+    def create_chat_completion(self, **kwargs):
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -51,7 +49,7 @@ class ImageChatSession:
             return response
         except Exception as e:
             print(f"An error occurred while creating the chat completion: {e}")
-            return None
+            raise
 
     @staticmethod
     def validate_image_url(url):
@@ -62,18 +60,21 @@ class ImageChatSession:
         except requests.RequestException as e:
             raise ValueError(f"An error occurred while validating the URL: {e}")
 
-    def add_message(self, content, role="user", index=None):
-        message_type = "text"
+    def create_image_content(self, content):
         if isinstance(content, Image.Image) or isinstance(content, np.ndarray):
             content = {"url": image_to_base64(content)}
-            message_type = "image_url"
         elif type(content) in [str, Path] and os.path.exists(content):
             content = {"url": self.encode_image_from_file(content)}
-            message_type = "image_url"
         elif isinstance(content, str) and content.startswith("http"):
             self.validate_image_url(content)
-            message_type = "image_url"
             content = {"url": content}
+        return content
+
+    def add_message(self, content, role="user", index=None):
+        message_type = "text"
+        parsed_content = self.create_image_content(content)
+        if parsed_content != content:
+            message_type = "iamge_url"
         if index is None:
             self.messages.append({"role": role, "content": [{"type": message_type, message_type: content}]})
         else:

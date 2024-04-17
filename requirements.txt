@@ -3,3 +3,4 @@ colorama
 prompt_toolkit
 Pillow
 numpy
+requests

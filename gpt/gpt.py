@@ -177,7 +177,7 @@ def run_gpt(
     model: str = "gpt-3.5-turbo",
     seed: int = None,
     api_key: str = None,
-    json_output: bool = False
+    json_output: bool = False,
     **kwargs,
 ):
     if model == "gpt-4":
