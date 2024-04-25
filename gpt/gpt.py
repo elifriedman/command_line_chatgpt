@@ -3,6 +3,7 @@ import sys
 import os
 import openai
 from openai import OpenAI
+from anthropic import Anthropic
 import argparse
 from prompt_toolkit import PromptSession, ANSI
 from prompt_toolkit.history import FileHistory
@@ -137,7 +138,7 @@ class Context:
             if max_contexts is not None:
                 old_max = self.max_contexts
                 self.max_contexts = max_contexts
-            completion = run_gpt(
+            completion, finish_reason = run_gpt(
                 context=self,
                 model=model,
                 temperature=temperature,
@@ -154,16 +155,16 @@ class Context:
             print(Fore.RED + Style.BRIGHT + "You're going too fast! Error: " + str(exc) + Style.RESET_ALL)
             return ""
 
-        if completion.choices[0].finish_reason == "function_call":
+        if finish_reason == "function_call":
             function_info = completion.choices[0].message.function_call
             response = self.handle_function_call(function_info)
             self.add(content=response, role=Role.FUNCTION, name=function_info["name"])
-        elif completion.choices[0].finish_reason == "length":
-            current_response = completion.choices[0].message.content
+        elif finish_reason == "length":
+            current_response = completion
             self.add(content=current_response, role=Role.ASSISTANT)
             response = f"{current_response}||cutoff {max_tokens}||"
         else:
-            response = completion.choices[0].message.content
+            response = completion
             self.add(content=response, role=Role.ASSISTANT)
         return response
 
@@ -182,25 +183,43 @@ def run_gpt(
 ):
     if model == "gpt-4":
         model = "gpt-4-1106-preview"
+    service = "openai" if "gpt" in model else "anthropic"
     if json_output is True:
         kwargs["response_format"] = {"type": "json_object"}
-    api_key = api_key if api_key is not None else os.getenv("OPENAI_API_KEY")
-    client = OpenAI(api_key=api_key)
     messages = context.context
+    if service == "openai":
+        api_key = api_key if api_key is not None else os.getenv("OPENAI_API_KEY")
+        client = OpenAI(api_key=api_key)
+        Response = client.chat.completions.create
+        kwargs["frequency_penalty"] = frequency_penalty
+        kwargs["presence_penalty"] = presence_penalty
+        kwargs["seed"] = seed
+    elif service == "anthropic":
+        api_key = api_key if api_key is not None else os.getenv("ANTHROPIC_API_KEY")
+        client = Anthropic(api_key=api_key)
+        Response = client.messages.create
+        has_system = [i for i in range(len(messages)) if messages[i]['role'] == 'system']
+        if len(has_system) > 0:
+            system_prompt = messages.pop(has_system[0])['content']
+            kwargs['system'] = system_prompt
+
     if "functions" in kwargs and not kwargs["functions"]:
         kwargs.pop("functions")
         kwargs.pop("function_call", None)
-    out = client.chat.completions.create(
+    out = Response(
         model=model,
         messages=messages,
         temperature=temperature,
         max_tokens=max_tokens,
-        frequency_penalty=frequency_penalty,
-        presence_penalty=presence_penalty,
-        seed=seed,
         **kwargs,
     )
-    return out
+    if service == "openai":
+        stop_reason = out.choices[0].finish_reason
+        content = out.choices[0].message.content
+    elif service == "anthropic":
+        stop_reason = out.stop_reason
+        content = out.content[0].text
+    return content, stop_reason
 
 
 class QuestionAnswer:
@@ -269,7 +288,7 @@ class QuestionAnswer:
         messages = self.get_messages(new_question, add_to_context=add_to_context)
 
         try:
-            completion = run_gpt(
+            completion, finish_reason = run_gpt(
                 context=self.context,
                 model=self.model,
                 temperature=self.temperature,
@@ -282,17 +301,20 @@ class QuestionAnswer:
                 **kwargs,
             )
         except openai.RateLimitError as exc:
-            print(Fore.RED + Style.BRIGHT + "You're going too fast! Error: " + str(exc) + Style.RESET_ALL)
+            print(Fore.RED + Style.BRIGHT + "RateLimitError! " + str(exc) + Style.RESET_ALL)
+            return ""
+        except openai.NotFoundError as exc:
+            print(Fore.RED + Style.BRIGHT + "NotFoundError! " + str(exc) + Style.RESET_ALL)
             return ""
 
-        if completion.choices[0].finish_reason == "function_call":
+        if finish_reason == "function_call":
             function_info = completion.choices[0].message.function_call
             response = self.handle_function_call(function_info)
             if add_to_context:
                 self.context.add(content=response, role=Role.FUNCTION, name=function_info["name"])
-        elif completion.choices[0].finish_reason == "length":
+        elif finish_reason == "length":
             print(Fore.RED + "RESPONSE REACHED MAX LENGTH: {self.max_tokens}" + Style.RESET_ALL)
-            response = completion.choices[0].message.content
+            response = completion
             if add_to_context:
                 self.context.add(content=response, role=Role.ASSISTANT)
             # current_response = completion.choices[0].message.content
@@ -300,7 +322,7 @@ class QuestionAnswer:
             # new_response = self.get_response(new_question=f"Continue your previous response. DO NOT SAY 'Sure, I'll continue' or anything of the sort, just continue from: \"{current_response[-40:]}...\"")
             # response = current_response + new_response
         else:
-            response = completion.choices[0].message.content
+            response = completion
             if add_to_context:
                 self.context.add(content=response, role=Role.ASSISTANT)
         return response
