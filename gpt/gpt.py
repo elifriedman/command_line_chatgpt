@@ -77,9 +77,8 @@ class Role(Enum):
 
 
 class Context:
-    def __init__(self, instructions, max_contexts: int = 100, context_file: str = None):
+    def __init__(self, instructions, max_contexts: int = 100):
         self.instructions = instructions
-        self.context_file = context_file
         self.max_contexts = max_contexts
         self._context = []
 
@@ -122,8 +121,11 @@ class Context:
         out._context = data["contexts"]
         return out
 
-    def save(self, path):
-        save_json(self.to_dict(), path)
+    def save(self, path, model: str=None):
+        data = self.to_dict()
+        if model is not None:
+            data['model'] = model
+        save_json(data, path)
 
     @classmethod
     def load(cls, path):
@@ -253,7 +255,6 @@ class QuestionAnswer:
         frequency_penalty: float = 0,
         presence_penalty: float = 0.6,
         max_contexts: int = 10,
-        context_file: str = None,
         model: str = "gpt-3.5-turbo",
         function_path: Path = None,
     ):
@@ -262,7 +263,7 @@ class QuestionAnswer:
         self.presence_penalty = presence_penalty
         self.frequency_penalty = frequency_penalty
         self.max_contexts = max_contexts
-        self.context = Context(instructions, max_contexts=max_contexts, context_file=context_file)
+        self.context = Context(instructions, max_contexts=max_contexts)
         self.model = model
         self.function_path = function_path
         self.functions = None
@@ -380,12 +381,6 @@ class QuestionAnswer:
     def save(self, path):
         save_json(self.to_dict(), path)
 
-    @classmethod
-    def load(cls, path):
-        data = load_json(path)
-        return cls.from_dict(data)
-
-
 def run(
     instructions: str,
     question: str,
@@ -394,7 +389,6 @@ def run(
     frequency_penalty: int,
     presence_penalty: float = 0.6,
     max_contexts: int = 10,
-    context_file: str = None,
     model: str = "gpt-3.5-turbo",
 ):
     question_answer = QuestionAnswer(
@@ -404,7 +398,6 @@ def run(
         frequency_penalty=frequency_penalty,
         presence_penalty=presence_penalty,
         max_contexts=max_contexts,
-        context_file=context_file,
         model=model,
     )
     response = question_answer.get_response(question)
@@ -419,17 +412,34 @@ def save_conversation_history(text, filepath):
 
 
 def run_iteratively(
-    question_answer: QuestionAnswer,
+    instructions: str,
+    temperature: float,
+    max_tokens: int,
+    frequency_penalty: int,
+    presence_penalty: float = 0.6,
+    max_contexts: int = 10,
+    model: str = "gpt-3.5-turbo",
     history_path: Path = Path(os.path.expanduser("~/.gpt/history.txt")),
-    conversation_name: str = None
+    conversation_name: str = None,
+    load_conversation_path: str = None
 ):
     if conversation_name is None:
         conversation_name = str(datetime.now()).replace(' ', '_').replace(':', '-').split('.')[0]
-        conversation_path = history_path.parent / "conversations" / f"{conversation_name}.json"
+        conversation_path = history_path.parent / "conversations" / conversation_name
         conversation_path.parent.mkdir(parents=True, exist_ok=True)
+    question_answer = QuestionAnswer(
+        instructions=instructions,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        frequency_penalty=frequency_penalty,
+        presence_penalty=presence_penalty,
+        max_contexts=max_contexts,
+        model=model,
+    )
+    if load_conversation_path is not None:
+        question_answer.context = Context.load(load_conversation_path)
+    question_answer.context.save(conversation_path)
 
-    model = question_answer.model
-    instructions = question_answer.context.instructions
     # keep track of previous questions and answers
     save_conversation_history(
         f"----- New Conversation ({model}) -----" f"\n{instructions}\n----------------------------",
@@ -465,12 +475,11 @@ def run_iteratively(
         print(Fore.CYAN + "Processing..." + Style.RESET_ALL)
         # ask the user for their question
         # check the question is safe
-        question_answer.save(conversation_path)
-        save_conversation_history(f">>>>>\n{new_question}", history_path)
+        save_conversation(f">>>>>\n{new_question}", history_path)
         response = question_answer.get_response(new_question)
-        save_conversation_history(f"<<<<<\n{response}", history_path)
+        save_conversation(f"<<<<<\n{response}", history_path)
         print(response)
-        question_answer.save(conversation_path)
+        question_answer.context.save(conversation_path)
 
 
 def parse_args():
@@ -479,7 +488,7 @@ def parse_args():
         "--load",
         "-l",
         type=str,
-        help="Load conversation",
+        help="Load a conversation",
     )
     parser.add_argument(
         "--instructions",
@@ -536,31 +545,15 @@ def parse_args():
 
 def main():
     args = parse_args()
-
-    instructions=read_instructions(args.instructions),
-    temperature=args.temperature,
-    max_tokens=args.max_tokens,
-    frequency_penalty=args.frequency_penalty,
-    presence_penalty=args.presence_penalty,
-    max_contexts=args.max_contexts,
-    context_file=None,
-    model=args.model,
-    if args.load is not None:
-        question_answer = QuestionAnswer.load(args.load)
-    else:
-        question_answer = QuestionAnswer(
-            instructions=instructions,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            frequency_penalty=frequency_penalty,
-            presence_penalty=presence_penalty,
-            max_contexts=max_contexts,
-            context_file=context_file,
-            model=model,
-        )
-
     run_iteratively(
-        question_answer=question_answer
+        instructions=read_instructions(args.instructions),
+        temperature=args.temperature,
+        max_tokens=args.max_tokens,
+        frequency_penalty=args.frequency_penalty,
+        presence_penalty=args.presence_penalty,
+        max_contexts=args.max_contexts,
+        model=args.model,
+        load_conversation_path=args.load
     )
 
 
