@@ -44,6 +44,18 @@ base_path = Path(os.path.expanduser("~/.gpt"))
 base_path.mkdir(exist_ok=True)
 load_dotenv(env_path=base_path / ".env")
 
+MODEL_MAP = {
+        "haiku": "claude-3-haiku-20240307",
+        "sonnet": "claude-3-sonnet-20240229",
+        "opus": "claude-3-opus-20240229",
+        "claude": "claude-3-opus-20240229",
+        "gpt-4": "gpt-4-1106-preview",
+        "gpt4": "gpt-4-1106-preview",
+        "gpt": "gpt-4-1106-preview",
+}
+
+
+
 
 def read_instructions(path):
     if not os.path.exists(path):
@@ -181,8 +193,8 @@ def run_gpt(
     json_output: bool = False,
     **kwargs,
 ):
-    if model == "gpt-4":
-        model = "gpt-4-1106-preview"
+    if model in MODEL_MAP:
+        model = MODEL_MAP[model]
     if "gpt" in model:
         service = "openai"
     elif "claude" in model:
