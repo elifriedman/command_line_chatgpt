@@ -1,4 +1,5 @@
 #!/home/eli/workspace/gpt/venv/bin/python
+from datetime import datetime
 import sys
 import os
 import openai
@@ -61,7 +62,7 @@ def read_instructions(path):
     if not os.path.exists(path):
         return path
     with open(path) as f:
-        return f.read()
+        return f.read().strip()
 
 
 def read_function_list(path):
@@ -348,33 +349,41 @@ class QuestionAnswer:
                 self.context.add(content=response, role=Role.ASSISTANT)
         return response
 
+    def to_dict(self):
+        return {
+            "instructions": self.context.instructions,
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            "presence_penalty": self.presence_penalty,
+            "frequency_penalty": self.frequency_penalty,
+            "max_contexts": self.max_contexts,
+            "context": self.context.to_dict(),
+            "model": self.model,
+            "function_path": str(self.function_path) if self.function_path else None,
+        }
 
-def get_moderation(question):
-    """
-    Check the question is safe to ask the model
+    @classmethod
+    def from_dict(cls, data):
+        qa = cls(
+            instructions=data["instructions"],
+            temperature=data["temperature"],
+            max_tokens=data["max_tokens"],
+            presence_penalty=data["presence_penalty"],
+            frequency_penalty=data["frequency_penalty"],
+            max_contexts=data["max_contexts"],
+            model=data["model"],
+            function_path=Path(data["function_path"]) if data["function_path"] else None,
+        )
+        qa.context = Context.from_dict(data["context"])
+        return qa
 
-    Parameters:
-        question (str): The question to check
+    def save(self, path):
+        save_json(self.to_dict(), path)
 
-    Returns a list of errors if the question is not safe, otherwise returns None
-    """
-    return None
-
-    errors = {
-        "hate": "Content that expresses, incites, or promotes hate based on race, gender, ethnicity, religion, nationality, sexual orientation, disability status, or caste.",
-        "hate/threatening": "Hateful content that also includes violence or serious harm towards the targeted group.",
-        "self-harm": "Content that promotes, encourages, or depicts acts of self-harm, such as suicide, cutting, and eating disorders.",
-        "sexual": "Content meant to arouse sexual excitement, such as the description of sexual activity, or that promotes sexual services (excluding sex education and wellness).",
-        "sexual/minors": "Sexual content that includes an individual who is under 18 years old.",
-        "violence": "Content that promotes or glorifies violence or celebrates the suffering or humiliation of others.",
-        "violence/graphic": "Violent content that depicts death, violence, or serious physical injury in extreme graphic detail.",
-    }
-    response = openai.Moderation.create(input=question)
-    if response.results[0].flagged:
-        # get the categories that are flagged and generate a message
-        result = [error for category, error in errors.items() if response.results[0].categories[category]]
-        return result
-    return None
+    @classmethod
+    def load(cls, path):
+        data = load_json(path)
+        return cls.from_dict(data)
 
 
 def run(
@@ -402,7 +411,7 @@ def run(
     return response
 
 
-def save_conversation(text, filepath):
+def save_conversation_history(text, filepath):
     path = Path(filepath)
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "a") as f:
@@ -410,32 +419,23 @@ def save_conversation(text, filepath):
 
 
 def run_iteratively(
-    instructions: str,
-    temperature: float,
-    max_tokens: int,
-    frequency_penalty: int,
-    presence_penalty: float = 0.6,
-    max_contexts: int = 10,
-    context_file: str = None,
-    model: str = "gpt-3.5-turbo",
-    filepath: Path = Path(os.path.expanduser("~/.gpt/history.txt")),
+    question_answer: QuestionAnswer,
+    history_path: Path = Path(os.path.expanduser("~/.gpt/history.txt")),
+    conversation_name: str = None
 ):
-    question_answer = QuestionAnswer(
-        instructions=instructions,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        frequency_penalty=frequency_penalty,
-        presence_penalty=presence_penalty,
-        max_contexts=max_contexts,
-        context_file=context_file,
-        model=model,
-    )
+    if conversation_name is None:
+        conversation_name = str(datetime.now()).replace(' ', '_').replace(':', '-').split('.')[0]
+        conversation_path = history_path.parent / "conversations" / f"{conversation_name}.json"
+        conversation_path.parent.mkdir(parents=True, exist_ok=True)
 
+    model = question_answer.model
+    instructions = question_answer.context.instructions
     # keep track of previous questions and answers
-    save_conversation(
+    save_conversation_history(
         f"----- New Conversation ({model}) -----" f"\n{instructions}\n----------------------------",
-        filepath,
+        history_path,
     )
+    question_answer.save(conversation_path)
     question_holder_hack = {"question": ""}
 
     kb = KeyBindings()
@@ -465,26 +465,27 @@ def run_iteratively(
         print(Fore.CYAN + "Processing..." + Style.RESET_ALL)
         # ask the user for their question
         # check the question is safe
-        errors = get_moderation(new_question)
-        if errors:
-            print(Fore.RED + Style.BRIGHT + "Sorry, your question didn't pass the moderation check:")
-            for error in errors:
-                print(error)
-            print(Style.RESET_ALL)
-            continue
-        save_conversation(f">>>>>\n{new_question}", filepath)
+        question_answer.save(conversation_path)
+        save_conversation_history(f">>>>>\n{new_question}", history_path)
         response = question_answer.get_response(new_question)
-        save_conversation(f"<<<<<\n{response}", filepath)
+        save_conversation_history(f"<<<<<\n{response}", history_path)
         print(response)
+        question_answer.save(conversation_path)
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Arguments for controlling ChatGPT")
     parser.add_argument(
+        "--load",
+        "-l",
+        type=str,
+        help="Load conversation",
+    )
+    parser.add_argument(
         "--instructions",
         "-i",
         type=str,
-        default=os.path.expanduser("~/.gpt/default_prompt.txt"),
+        default=os.path.expanduser("~/workspace/gpt/prompts/default_prompt.txt"),
         help="Filepath for initial ChatGPT instruction prompt (default ~/.gpt/default_prompt.txt). See https://github.com/f/awesome-chatgpt-prompts for inspiration",
     )
     parser.add_argument(
@@ -535,18 +536,31 @@ def parse_args():
 
 def main():
     args = parse_args()
-    model = args.model
-    if model == "gpt-4":
-        model = "gpt-4-1106-preview"
+
+    instructions=read_instructions(args.instructions),
+    temperature=args.temperature,
+    max_tokens=args.max_tokens,
+    frequency_penalty=args.frequency_penalty,
+    presence_penalty=args.presence_penalty,
+    max_contexts=args.max_contexts,
+    context_file=None,
+    model=args.model,
+    if args.load is not None:
+        question_answer = QuestionAnswer.load(args.load)
+    else:
+        question_answer = QuestionAnswer(
+            instructions=instructions,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            frequency_penalty=frequency_penalty,
+            presence_penalty=presence_penalty,
+            max_contexts=max_contexts,
+            context_file=context_file,
+            model=model,
+        )
+
     run_iteratively(
-        instructions=read_instructions(args.instructions),
-        temperature=args.temperature,
-        max_tokens=args.max_tokens,
-        frequency_penalty=args.frequency_penalty,
-        presence_penalty=args.presence_penalty,
-        max_contexts=args.max_contexts,
-        context_file=None,
-        model=model,
+        question_answer=question_answer
     )
 
 
