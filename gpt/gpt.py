@@ -183,7 +183,12 @@ def run_gpt(
 ):
     if model == "gpt-4":
         model = "gpt-4-1106-preview"
-    service = "openai" if "gpt" in model else "anthropic"
+    if "gpt" in model:
+        service = "openai"
+    elif "claude" in model:
+        service = "anthropic"
+    else:
+        service = "ollama"
     if json_output is True:
         kwargs["response_format"] = {"type": "json_object"}
     messages = context.context
@@ -202,6 +207,10 @@ def run_gpt(
         if len(has_system) > 0:
             system_prompt = messages.pop(has_system[0])['content']
             kwargs['system'] = system_prompt
+    else:
+        api_key = "ollama"
+        client = OpenAI(api_key=api_key, base_url = "http://localhost:11434/v1")
+        Response = client.chat.completions.create
 
     if "functions" in kwargs and not kwargs["functions"]:
         kwargs.pop("functions")
@@ -213,7 +222,7 @@ def run_gpt(
         max_tokens=max_tokens,
         **kwargs,
     )
-    if service == "openai":
+    if service == "openai" or service == "ollama":
         stop_reason = out.choices[0].finish_reason
         content = out.choices[0].message.content
     elif service == "anthropic":
