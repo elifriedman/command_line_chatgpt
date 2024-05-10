@@ -475,9 +475,9 @@ def run_iteratively(
         print(Fore.CYAN + "Processing..." + Style.RESET_ALL)
         # ask the user for their question
         # check the question is safe
-        save_conversation(f">>>>>\n{new_question}", history_path)
+        save_conversation_history(f">>>>>\n{new_question}", history_path)
         response = question_answer.get_response(new_question)
-        save_conversation(f"<<<<<\n{response}", history_path)
+        save_conversation_history(f"<<<<<\n{response}", history_path)
         print(response)
         question_answer.context.save(conversation_path)
 
