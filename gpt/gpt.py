@@ -121,8 +121,11 @@ class Context:
         out._context = data["contexts"]
         return out
 
-    def save(self, path):
-        save_json(self.to_dict(), path)
+    def save(self, path, model: str=None):
+        data = self.to_dict()
+        if model is not None:
+            data['model'] = model
+        save_json(data, path)
 
     @classmethod
     def load(cls, path):
@@ -348,34 +351,36 @@ class QuestionAnswer:
                 self.context.add(content=response, role=Role.ASSISTANT)
         return response
 
+    def to_dict(self):
+        return {
+            "instructions": self.context.instructions,
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            "presence_penalty": self.presence_penalty,
+            "frequency_penalty": self.frequency_penalty,
+            "max_contexts": self.max_contexts,
+            "context": self.context.to_dict(),
+            "model": self.model,
+            "function_path": str(self.function_path) if self.function_path else None,
+        }
 
-def get_moderation(question):
-    """
-    Check the question is safe to ask the model
+    @classmethod
+    def from_dict(cls, data):
+        qa = cls(
+            instructions=data["instructions"],
+            temperature=data["temperature"],
+            max_tokens=data["max_tokens"],
+            presence_penalty=data["presence_penalty"],
+            frequency_penalty=data["frequency_penalty"],
+            max_contexts=data["max_contexts"],
+            model=data["model"],
+            function_path=Path(data["function_path"]) if data["function_path"] else None,
+        )
+        qa.context = Context.from_dict(data["context"])
+        return qa
 
-    Parameters:
-        question (str): The question to check
-
-    Returns a list of errors if the question is not safe, otherwise returns None
-    """
-    return None
-
-    errors = {
-        "hate": "Content that expresses, incites, or promotes hate based on race, gender, ethnicity, religion, nationality, sexual orientation, disability status, or caste.",
-        "hate/threatening": "Hateful content that also includes violence or serious harm towards the targeted group.",
-        "self-harm": "Content that promotes, encourages, or depicts acts of self-harm, such as suicide, cutting, and eating disorders.",
-        "sexual": "Content meant to arouse sexual excitement, such as the description of sexual activity, or that promotes sexual services (excluding sex education and wellness).",
-        "sexual/minors": "Sexual content that includes an individual who is under 18 years old.",
-        "violence": "Content that promotes or glorifies violence or celebrates the suffering or humiliation of others.",
-        "violence/graphic": "Violent content that depicts death, violence, or serious physical injury in extreme graphic detail.",
-    }
-    response = openai.Moderation.create(input=question)
-    if response.results[0].flagged:
-        # get the categories that are flagged and generate a message
-        result = [error for category, error in errors.items() if response.results[0].categories[category]]
-        return result
-    return None
-
+    def save(self, path):
+        save_json(self.to_dict(), path)
 
 def run(
     instructions: str,
@@ -416,10 +421,15 @@ def run_iteratively(
     frequency_penalty: int,
     presence_penalty: float = 0.6,
     max_contexts: int = 10,
-    context_file: str = None,
     model: str = "gpt-3.5-turbo",
-    filepath: Path = Path(os.path.expanduser("~/.gpt/history.txt")),
+    history_path: Path = Path(os.path.expanduser("~/.gpt/history.txt")),
+    conversation_name: str = None,
+    load_conversation_path: str = None
 ):
+    if conversation_name is None:
+        conversation_name = str(datetime.now()).replace(' ', '_').replace(':', '-').split('.')[0]
+        conversation_path = history_path.parent / "conversations" / conversation_name
+        conversation_path.parent.mkdir(parents=True, exist_ok=True)
     question_answer = QuestionAnswer(
         instructions=instructions,
         temperature=temperature,
@@ -430,11 +440,14 @@ def run_iteratively(
         context_file=context_file,
         model=model,
     )
+    if load_conversation_path is not None:
+        question_answer.context = Context.load(load_conversation_path)
+    question_answer.context.save(conversation_path)
 
     # keep track of previous questions and answers
     save_conversation(
         f"----- New Conversation ({model}) -----" f"\n{instructions}\n----------------------------",
-        filepath,
+        history_path,
     )
     question_holder_hack = {"question": ""}
 
@@ -465,17 +478,11 @@ def run_iteratively(
         print(Fore.CYAN + "Processing..." + Style.RESET_ALL)
         # ask the user for their question
         # check the question is safe
-        errors = get_moderation(new_question)
-        if errors:
-            print(Fore.RED + Style.BRIGHT + "Sorry, your question didn't pass the moderation check:")
-            for error in errors:
-                print(error)
-            print(Style.RESET_ALL)
-            continue
-        save_conversation(f">>>>>\n{new_question}", filepath)
+        save_conversation(f">>>>>\n{new_question}", history_path)
         response = question_answer.get_response(new_question)
-        save_conversation(f"<<<<<\n{response}", filepath)
+        save_conversation(f"<<<<<\n{response}", history_path)
         print(response)
+        question_answer.context.save(conversation_path)
 
 
 def parse_args():
@@ -536,8 +543,6 @@ def parse_args():
 def main():
     args = parse_args()
     model = args.model
-    if model == "gpt-4":
-        model = "gpt-4-1106-preview"
     run_iteratively(
         instructions=read_instructions(args.instructions),
         temperature=args.temperature,
