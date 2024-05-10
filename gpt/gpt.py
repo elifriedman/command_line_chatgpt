@@ -1,4 +1,5 @@
 #!/home/eli/workspace/gpt/venv/bin/python
+from datetime import datetime
 import sys
 import os
 import openai
@@ -76,9 +77,8 @@ class Role(Enum):
 
 
 class Context:
-    def __init__(self, instructions, max_contexts: int = 100, context_file: str = None):
+    def __init__(self, instructions, max_contexts: int = 100):
         self.instructions = instructions
-        self.context_file = context_file
         self.max_contexts = max_contexts
         self._context = []
 
@@ -255,7 +255,6 @@ class QuestionAnswer:
         frequency_penalty: float = 0,
         presence_penalty: float = 0.6,
         max_contexts: int = 10,
-        context_file: str = None,
         model: str = "gpt-3.5-turbo",
         function_path: Path = None,
     ):
@@ -264,7 +263,7 @@ class QuestionAnswer:
         self.presence_penalty = presence_penalty
         self.frequency_penalty = frequency_penalty
         self.max_contexts = max_contexts
-        self.context = Context(instructions, max_contexts=max_contexts, context_file=context_file)
+        self.context = Context(instructions, max_contexts=max_contexts)
         self.model = model
         self.function_path = function_path
         self.functions = None
@@ -390,7 +389,6 @@ def run(
     frequency_penalty: int,
     presence_penalty: float = 0.6,
     max_contexts: int = 10,
-    context_file: str = None,
     model: str = "gpt-3.5-turbo",
 ):
     question_answer = QuestionAnswer(
@@ -400,7 +398,6 @@ def run(
         frequency_penalty=frequency_penalty,
         presence_penalty=presence_penalty,
         max_contexts=max_contexts,
-        context_file=context_file,
         model=model,
     )
     response = question_answer.get_response(question)
@@ -437,7 +434,6 @@ def run_iteratively(
         frequency_penalty=frequency_penalty,
         presence_penalty=presence_penalty,
         max_contexts=max_contexts,
-        context_file=context_file,
         model=model,
     )
     if load_conversation_path is not None:
@@ -487,6 +483,12 @@ def run_iteratively(
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Arguments for controlling ChatGPT")
+    parser.add_argument(
+        "--load",
+        "-l",
+        type=str,
+        help="Load a conversation",
+    )
     parser.add_argument(
         "--instructions",
         "-i",
@@ -542,7 +544,6 @@ def parse_args():
 
 def main():
     args = parse_args()
-    model = args.model
     run_iteratively(
         instructions=read_instructions(args.instructions),
         temperature=args.temperature,
@@ -550,8 +551,8 @@ def main():
         frequency_penalty=args.frequency_penalty,
         presence_penalty=args.presence_penalty,
         max_contexts=args.max_contexts,
-        context_file=None,
-        model=model,
+        model=args.model,
+        load_conversation_path=args.load
     )
 
 
