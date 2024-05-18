@@ -42,7 +42,7 @@ usage: gpt.py [-h] [--instructions_path INSTRUCTIONS_PATH] [--temperature TEMPER
               [--max_contexts MAX_CONTEXTS]
 ```
 
-## Arguments
+### Arguments
 
 - `-h`, `--help`: show help message and exit
 - `--instructions_path`, `-i`: filepath for initial ChatGPT instruction prompt (default instructions.txt). See https://github.com/f/awesome-chatgpt-prompts for inspiration or an instruction string
@@ -52,3 +52,24 @@ usage: gpt.py [-h] [--instructions_path INSTRUCTIONS_PATH] [--temperature TEMPER
 - `--presence_penalty`: presence penalty value for generating text
 - `--max_contexts`: maximum number of questions to include in prompt
 
+### Extra features
+The **gpt-4o** or **gpt-4-vision-preview** models can also process images. In order to add an image to your prompt, you can add in an image tag: `/image=<url_or_path_to_image>`.
+
+For example:
+```
+$ gpt -m gpt-4o
+Enter your prompt and then press <tab>-<enter>:
+What's in this image?
+/image=images/horse.png
+Processing...
+The image contains a horse running through a field.
+```
+You can also add multiple image tags:
+```
+$ gpt -m gpt-4o
+Enter your prompt and then press <tab>-<enter>:
+What's the difference between these two images?
+/image=images/horse.png /image='images/horse and sheep.png'
+Processing...
+The images both show a field, but the first image contains a horse and the second image contains a horse and a sheep.
+```
