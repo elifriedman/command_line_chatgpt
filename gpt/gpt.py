@@ -1,20 +1,22 @@
 #!/home/eli/workspace/gpt/venv/bin/python
-from datetime import datetime
+import argparse
 import sys
 import os
 import openai
+import importlib
+import json
+
+from datetime import datetime
 from openai import OpenAI
 from anthropic import Anthropic
-import argparse
 from prompt_toolkit import PromptSession, ANSI
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit.key_binding import KeyBindings
 from colorama import Fore, Back, Style
 from pathlib import Path
-import importlib
-import json
 from enum import Enum
+from .vision import create_image_content
 
 
 def save_json(obj, f, mode="w"):
@@ -37,6 +39,8 @@ def load_dotenv(env_path=Path(__file__).parent / ".env"):
     with open(env_path) as f:
         for line in f:
             line = line.strip()
+            if line.startswith("#"):
+                continue
             key, value = line.split("=")
             os.environ[key] = value
 
@@ -46,16 +50,14 @@ base_path.mkdir(exist_ok=True)
 load_dotenv(env_path=base_path / ".env")
 
 MODEL_MAP = {
-        "haiku": "claude-3-haiku-20240307",
-        "sonnet": "claude-3-sonnet-20240229",
-        "opus": "claude-3-opus-20240229",
-        "claude": "claude-3-opus-20240229",
-        "gpt-4": "gpt-4-1106-preview",
-        "gpt4": "gpt-4-1106-preview",
-        "gpt": "gpt-4-1106-preview",
+    "haiku": "claude-3-haiku-20240307",
+    "sonnet": "claude-3-sonnet-20240229",
+    "opus": "claude-3-opus-20240229",
+    "claude": "claude-3-opus-20240229",
+    "gpt-4": "gpt-4o",
+    "gpt4": "gpt-4o",
+    "gpt": "gpt-4o",
 }
-
-
 
 
 def read_instructions(path):
@@ -121,10 +123,10 @@ class Context:
         out._context = data["contexts"]
         return out
 
-    def save(self, path, model: str=None):
+    def save(self, path, model: str = None):
         data = self.to_dict()
         if model is not None:
-            data['model'] = model
+            data["model"] = model
         save_json(data, path)
 
     @classmethod
@@ -135,9 +137,9 @@ class Context:
     def get_response(
         self,
         new_question="",
-        model: str = "gpt-3.5-turbo",
+        model: str = "gpt-4o",
         temperature: float = 0.5,
-        max_tokens: int = 500,
+        max_tokens: int = 1000,
         frequency_penalty: float = 0,
         presence_penalty: float = 0.6,
         seed: int = None,
@@ -167,7 +169,13 @@ class Context:
             if max_contexts is not None:
                 self.max_contexts = old_max
         except openai.RateLimitError as exc:
-            print(Fore.RED + Style.BRIGHT + "You're going too fast! Error: " + str(exc) + Style.RESET_ALL)
+            print(
+                Fore.RED
+                + Style.BRIGHT
+                + "You're going too fast! Error: "
+                + str(exc)
+                + Style.RESET_ALL
+            )
             return ""
 
         if finish_reason == "function_call":
@@ -187,10 +195,10 @@ class Context:
 def run_gpt(
     context: Context,
     temperature: float = 0.5,
-    max_tokens: int = 500,
+    max_tokens: int = 1000,
     frequency_penalty: float = 0,
     presence_penalty: float = 0.6,
-    model: str = "gpt-3.5-turbo",
+    model: str = "gpt-4o",
     seed: int = None,
     api_key: str = None,
     json_output: bool = False,
@@ -218,13 +226,15 @@ def run_gpt(
         api_key = api_key if api_key is not None else os.getenv("ANTHROPIC_API_KEY")
         client = Anthropic(api_key=api_key)
         Response = client.messages.create
-        has_system = [i for i in range(len(messages)) if messages[i]['role'] == 'system']
+        has_system = [i for i in range(len(messages)) if messages[i]["role"] == "system"]
         if len(has_system) > 0:
-            system_prompt = messages.pop(has_system[0])['content']
-            kwargs['system'] = system_prompt
+            system_prompt = messages.pop(has_system[0])["content"]
+            kwargs["system"] = system_prompt
     else:
         api_key = "ollama"
-        client = OpenAI(api_key=api_key, base_url = "http://localhost:11434/v1")
+        client = OpenAI(
+            api_key=api_key, base_url=os.getenv("OLLAMA_URL", "http://localhost:11434/v1")
+        )
         Response = client.chat.completions.create
 
     if "functions" in kwargs and not kwargs["functions"]:
@@ -251,11 +261,11 @@ class QuestionAnswer:
         self,
         instructions,
         temperature: float = 0.5,
-        max_tokens: int = 500,
+        max_tokens: int = 1000,
         frequency_penalty: float = 0,
         presence_penalty: float = 0.6,
-        max_contexts: int = 10,
-        model: str = "gpt-3.5-turbo",
+        max_contexts: int = 100,
+        model: str = "gpt-4o",
         function_path: Path = None,
     ):
         self.temperature = temperature
@@ -292,7 +302,9 @@ class QuestionAnswer:
             arguments = json.loads(arguments)
         except Exception as exc:
             return f"Error calling `{function_name}`. Problem parsing json '{arguments}' {exc}"
-        return self.call_method_from_file(file_name="functions", function_name=function_name, args=arguments)
+        return self.call_method_from_file(
+            file_name="functions", function_name=function_name, args=arguments
+        )
 
     def get_messages(self, new_question="", add_to_context: bool = True):
         has_new_question = new_question != ""
@@ -381,6 +393,7 @@ class QuestionAnswer:
     def save(self, path):
         save_json(self.to_dict(), path)
 
+
 def run(
     instructions: str,
     question: str,
@@ -389,7 +402,7 @@ def run(
     frequency_penalty: int,
     presence_penalty: float = 0.6,
     max_contexts: int = 10,
-    model: str = "gpt-3.5-turbo",
+    model: str = "gpt-4o",
 ):
     question_answer = QuestionAnswer(
         instructions=instructions,
@@ -417,14 +430,14 @@ def run_iteratively(
     max_tokens: int,
     frequency_penalty: int,
     presence_penalty: float = 0.6,
-    max_contexts: int = 10,
-    model: str = "gpt-3.5-turbo",
+    max_contexts: int = 100,
+    model: str = "gpt-4o",
     history_path: Path = Path(os.path.expanduser("~/.gpt/history.txt")),
     conversation_name: str = None,
-    load_conversation_path: str = None
+    load_conversation_path: str = None,
 ):
     if conversation_name is None:
-        conversation_name = str(datetime.now()).replace(' ', '_').replace(':', '-').split('.')[0]
+        conversation_name = str(datetime.now()).replace(" ", "_").replace(":", "-").split(".")[0]
         conversation_path = history_path.parent / "conversations" / conversation_name
         conversation_path.parent.mkdir(parents=True, exist_ok=True)
     question_answer = QuestionAnswer(
@@ -508,7 +521,7 @@ def parse_args():
         "--max_tokens",
         "-n",
         type=int,
-        default=500,
+        default=2000,
         help="Maximum number of tokens to generate",
     )
     parser.add_argument(
@@ -536,7 +549,7 @@ def parse_args():
         "--model",
         "-m",
         type=str,
-        default="gpt-3.5-turbo",
+        default="gpt-4o",
         help="Which chatgpt model to use",
     )
     args = parser.parse_args()
@@ -553,7 +566,7 @@ def main():
         presence_penalty=args.presence_penalty,
         max_contexts=args.max_contexts,
         model=args.model,
-        load_conversation_path=args.load
+        load_conversation_path=args.load,
     )
 
 
