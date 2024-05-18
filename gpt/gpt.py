@@ -16,6 +16,7 @@ from prompt_toolkit.key_binding import KeyBindings
 from colorama import Fore, Back, Style
 from pathlib import Path
 from enum import Enum
+from .utils import load_dotenv, base_path, split_text_around_image_tags
 from .vision import create_image_content
 
 
@@ -29,24 +30,6 @@ def load_json(f):
         return json.load(f)
 
 
-# load values from the .env file if it exists
-def load_dotenv(env_path=Path(__file__).parent / ".env"):
-    if not Path(env_path).exists():
-        print(
-            f"{Fore.RED}!!ERROR!!{Style.RESET_ALL} Please put create a file called `~/.gpt/.env` file with your OpenAI key: OPENAI_API_KEY=sk..."
-        )
-        exit(1)
-    with open(env_path) as f:
-        for line in f:
-            line = line.strip()
-            if line.startswith("#"):
-                continue
-            key, value = line.split("=")
-            os.environ[key] = value
-
-
-base_path = Path(os.path.expanduser("~/.gpt"))
-base_path.mkdir(exist_ok=True)
 load_dotenv(env_path=base_path / ".env")
 
 MODEL_MAP = {
@@ -90,7 +73,18 @@ class Context:
     def make_context_item(self, content, role: Role, **kwargs):
         return {"role": role.value, "content": content, **kwargs}
 
+    def process_new_content(self, content):
+        split_content = split_text_around_image_tags(content)
+        out = []
+        for content_type, content in split_content:
+            if content_type == "text":
+                out.append({"type": "text", "text": content})
+            elif content_type == "image_url":
+                out.append({"type": "image_url", "image_url": {"url": create_image_content(content)}})
+        return out
+
     def add(self, content, role: Role, **kwargs):
+        content = self.process_new_content(content)
         new_context = self.make_context_item(content=content, role=role, **kwargs)
         self._context.append(new_context)
 
